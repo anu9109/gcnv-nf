@@ -26,7 +26,6 @@ process RUN_CNMOPS {
 
     tag "cn.mops on ${params.sample_id}"
     publishDir "${params.outdir}", mode: 'copy'
-    memory '48 GB'
 
     input:
         path bams_txt
