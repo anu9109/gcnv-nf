@@ -42,7 +42,7 @@ process RUN_CNMOPS {
     script:
     """
     echo "3. Running cn.mops"
-    Rscript run_cnmops.R ${bams_txt} 32 ${sample_id}
+    run_cnmops.R ${bams_txt} 32 ${sample_id}
     """
 }
 
@@ -63,7 +63,7 @@ process CNMOPS_TO_VCF {
     script:
     """
     echo "4. Create cn.mops VCF"
-    Rscript cnmops_to_vcf_per_sample.R ${sample_id} ${sample_cnvs}
+    cnmops_to_vcf_per_sample.R ${sample_id} ${sample_cnvs}
     """
 }
 
