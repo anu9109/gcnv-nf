@@ -1,4 +1,4 @@
- #!/usr/local/bin Rscript
+#!/usr/local/bin Rscript
 
 # library(readr)
 library(tidyverse)
