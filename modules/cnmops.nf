@@ -26,6 +26,7 @@ process RUN_CNMOPS {
 
     tag "cn.mops on ${params.sample_id}"
     publishDir "${params.outdir}", mode: 'copy'
+    memory '48 GB'
 
     input:
         path bams_txt
@@ -42,7 +43,7 @@ process RUN_CNMOPS {
     script:
     """
     echo "3. Running cn.mops"
-    run_cnmops.R ${bams_txt} 32 ${sample_id}
+    run_cnmops.R ${bams_txt} 8 ${sample_id}
     """
 }
 
