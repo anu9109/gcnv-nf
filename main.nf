@@ -8,9 +8,6 @@ include { PREPROCESS_GENOME_FASTA } from './modules/gatk.nf'
 include { COLLECT_READ_COUNTS } from './modules/gatk.nf'
 include { FILTER_GENOME } from './modules/gatk.nf'
 
-// create bams_channel of [sample_id, bam_file]
-bams_channel = Channel.of(tuple(params.sample_id, file(params.bam_file)))
-
 workflow {
     
     /*
@@ -22,6 +19,8 @@ workflow {
     )
     */
     
+    // create bams_channel of [sample_id, bam_file]
+    bams_channel = Channel.of(tuple(params.sample_id, file(params.bam_file)))
     genome_outdir = file("${params.outdir}/genome")
     GATK_GCNV(
         bams_channel,
