@@ -64,7 +64,7 @@ process COLLECT_READ_COUNTS {
     """
     gatk CollectReadCounts \\
         -L ${interval_list} \\
-        -R ${fasta} \\
+        -R ${ref_fasta} \\
         -imr OVERLAPPING_ONLY \\
         -I ${bam_file} \\
         --format TSV \\
