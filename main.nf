@@ -4,24 +4,41 @@ nextflow.enable.dsl=2
 include { PREPARE_SAMPLE_LIST } from './modules/cnmops.nf'
 include { RUN_CNMOPS } from './modules/cnmops.nf'
 include { CNMOPS_TO_VCF } from './modules/cnmops.nf'
+include { PREPROCESS_GENOME_FASTA } from './modules/gatk.nf'
+include { COLLECT_READ_COUNTS } from './modules/gatk.nf'
+include { FILTER_GENOME } from './modules/gatk.nf'
 
+// create bams_channel of [sample_id, bam_file]
+bams_channel = Channel.of(tuple(params.sample_id, file(params.bam_file)))
 
 workflow {
     
+    /*
     CNMOPS(
         params.sample_id, 
         file(params.bam_file),
         file(params.bams_list),
         params.outdir
     )
+    */
     
-    //GATK_GCNV()
+    genome_outdir = file("${params.outdir}/genome")
+    GATK_GCNV(
+        bams_channel,
+        params.outdir,
+        params.reference,
+        genome_outdir,
+        params.seqtk,         
+        params.genome_chrs, 
+        params.mappability_bed,
+        params.segmental_duplication_bed
+    )
 }
 
 
 
 // Subworkflow: CNMOPS CNV Detection
-//
+
 // This subworkflow performs CNV detection using the cn.mops algorithm.
 // It processes individual samples by normalizing against a cohort of control samples.
 workflow CNMOPS {
@@ -71,18 +88,8 @@ workflow CNMOPS {
         vcf = CNMOPS_TO_VCF.out.sample_cnvs_vcf
 }
 
-/*
-workflow.onComplete = {
-    log.info(
-        workflow.success
-            ? "\nDone!\n cn.mops ran successfully. See results in: ${params.outdir}\n"
-            : "\nOops .. something went wrong\n"
-    )
-}
-*/
 
 
-/*
 //
 // Subworkflow: GATK gCNV Analysis
 //
@@ -90,6 +97,7 @@ workflow.onComplete = {
 // It includes genome preprocessing, read count collection, ploidy determination,
 // CNV calling, postprocessing, and joint cohort segmentation.
 
+/*
 include { COLLECT_READ_COUNTS } from './modules/gatk.nf'
 include { FILTER_GENOME } from './modules/gatk.nf'
 include { SCATTER_GENOME } from './modules/gatk.nf'
@@ -97,37 +105,47 @@ include { DETERMINE_PLOIDY } from './modules/gatk.nf'
 include { CALL_CNVS } from './modules/gatk.nf'
 include { POSTPROCESS_CNVS } from './modules/gatk.nf'
 include { JOINT_CNVS_SEGMENTATION } from './modules/gatk.nf'
+*/
 
 workflow GATK_GCNV {
     take:
         bams_channel             // channel of [sample_id, bam_file] tuples
-        scatter_count            // val: number of intervals
-        genome_outdir            // val: output directory for genome
         sample_outdir            // val: output directory for samples
-        cnvs_outdir              // val: output directory for CNV calls
-        model_outdir             // val: output directory for models
-        scatter_outdir           // val: output directory for scattered intervals
-        outdir                   // val: final output directory
         gr37_fasta_in            // val: path to reference genome fasta
+        genome_outdir            // val: output directory for genome
         seqtk                    // val: path to seqtk
         genome_chrs              // val: path to genome chromosomes file
-        gatk_sif                 // val: path to gatk singularity container
         mappability_bed          // val: path to mappability BED
         segmental_duplication_bed // val: path to segmental duplication BED
-        hg19_ploidy_priors       // val: path to ploidy priors file
-        model_prefix             // val: prefix for model output files
-        cnvs_prefix              // val: prefix for CNV output files
-        pedigree                 // val: path to pedigree file
+        //scatter_count            // val: number of intervals
+        //cnvs_outdir              // val: output directory for CNV calls
+        //model_outdir             // val: output directory for models
+        //scatter_outdir           // val: output directory for scattered intervals
+        //outdir                   // val: final output directory
+        //gatk_sif                 // val: path to gatk singularity container
+        //hg19_ploidy_priors       // val: path to ploidy priors file
+        //model_prefix             // val: prefix for model output files
+        //cnvs_prefix              // val: prefix for CNV output files
+        //pedigree                 // val: path to pedigree file
 
     main:
+
+        // Step 1: Preprocess genome fasta
+        PREPROCESS_GENOME_FASTA(
+            gr37_fasta_in,
+            genome_outdir,
+            seqtk,
+            genome_chrs, 
+            mappability_bed,
+            segmental_duplication_bed
+        )
 
         // Step 2: Collect read counts from samples
         COLLECT_READ_COUNTS(
             bams_channel,
             sample_outdir,
-            gatk_sif,
             PREPROCESS_GENOME_FASTA.out.interval_list,
-            PREPROCESS_GENOME_FASTA.out.fasta
+            PREPROCESS_GENOME_FASTA.out.ref_fasta
         )
 
         // Step 3: Filter genome intervals based on read count outliers
@@ -135,16 +153,15 @@ workflow GATK_GCNV {
         FILTER_GENOME(
             read_count_list,
             genome_outdir,
-            gatk_sif,
             PREPROCESS_GENOME_FASTA.out.annotated_interval_list,
             PREPROCESS_GENOME_FASTA.out.interval_list
         )
 
+    /*
         // Step 4: Scatter genome intervals into shards
         SCATTER_GENOME(
             scatter_count,
             scatter_outdir,
-            gatk_sif,
             FILTER_GENOME.out.filtered_interval_list
         )
 
@@ -153,7 +170,6 @@ workflow GATK_GCNV {
             COLLECT_READ_COUNTS.out.read_counts.collect(),
             model_outdir,
             model_prefix,
-            gatk_sif,
             FILTER_GENOME.out.filtered_interval_list,
             hg19_ploidy_priors
         )
@@ -173,7 +189,6 @@ workflow GATK_GCNV {
             scatter_count,
             cnvs_outdir,
             cnvs_prefix,
-            gatk_sif,
             model_outdir,
             model_prefix,
             scatter_outdir
@@ -203,24 +218,33 @@ workflow GATK_GCNV {
             model_outdir,
             model_prefix,
             genome_outdir,
-            gatk_sif,
             pedigree
         )
 
         // Step 10: Create joint CNV segmentation
         POSTPROCESS_CNVS.out.genotyped_intervals.collect().set { vcfs }
-
+    */
 
     emit:
         genome_fasta = PREPROCESS_GENOME_FASTA.out.fasta
         read_counts = COLLECT_READ_COUNTS.out.read_counts
-        ploidy_calls = DETERMINE_PLOIDY.out.ploidy_calls
-        cnv_calls = CALL_CNVS.out.cnv_calls
-        cnv_models = CALL_CNVS.out.cnv_model
-        genotyped_vcfs = POSTPROCESS_CNVS.out.genotyped_intervals
-        denoised_copy_ratios = POSTPROCESS_CNVS.out.denoised_copy_ratios
+        //ploidy_calls = DETERMINE_PLOIDY.out.ploidy_calls
+        //cnv_calls = CALL_CNVS.out.cnv_calls
+        //cnv_models = CALL_CNVS.out.cnv_model
+        //genotyped_vcfs = POSTPROCESS_CNVS.out.genotyped_intervals
+        //denoised_copy_ratios = POSTPROCESS_CNVS.out.denoised_copy_ratios
 }
 
+
+
+/*
+workflow.onComplete = {
+    log.info(
+        workflow.success
+            ? "\nDone!\n cn.mops ran successfully. See results in: ${params.outdir}\n"
+            : "\nOops .. something went wrong\n"
+    )
+}
 */
 
 

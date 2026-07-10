@@ -1,31 +1,75 @@
 
+process PREPROCESS_GENOME_FASTA {
+
+    publishDir "${params.genome_outdir}", mode: 'copy' 
+
+    input:
+        val gr37_fasta_in
+        val genome_outdir
+        val seqtk
+        val genome_chrs
+        val mappability_bed
+        val segmental_duplication_bed
+
+    output:
+        path "gr37_clean.fasta", emit: ref_fasta
+        path "gr37_clean.fasta.fai", emit: fasta_index
+        path "gr37_clean.dict", emit: dict
+        path "gr37_clean.interval_list", emit: interval_list
+        path "gr37_clean_annotated.interval_list", emit: annotated_interval_list
+
+    script:
+    """
+    echo "1. Subsetting genome fasta to only chromosomes 1-22, X and Y.."
+    ${seqtk} subseq ${gr37_fasta_in} ${genome_chrs} > gr37_clean.fasta
+    
+    echo "2. Indexing genome fasta.."
+    samtools faidx gr37_clean.fasta
+
+    echo "3. Creating genome dictionary file.."
+    gatk CreateSequenceDictionary -R gr37_clean.fasta
+
+    echo "4. Preprocessing genome fasta into GATK .interval_list format.."
+    gatk PreprocessIntervals -R gr37_clean.fasta \\
+        --padding 0 \\
+        -imr OVERLAPPING_ONLY \\
+        -O gr37_clean.interval_list
+
+    echo "5. Annotating intervals with GC %, mappability and segmental duplication content.."
+    gatk AnnotateIntervals -L gr37_clean.interval_list \\
+        -R gr37_clean.fasta \\
+        --mappability-track ${mappability_bed} \\
+        --segmental-duplication-track ${segmental_duplication_bed} \\
+        -imr OVERLAPPING_ONLY \\
+        -O gr37_clean_annotated.interval_list
+    """
+}
+
+
 process COLLECT_READ_COUNTS {
 
     tag "Collect read counts from ${sample_id}"
-    publishDir "${sample_outdir}", mode: 'copy'
+    publishDir "${params.sample_outdir}", mode: 'copy' 
 
     input:
         tuple val(sample_id), val(bam_file)
         val sample_outdir
-        val gatk_sif
         path interval_list
         path ref_fasta
 
     output:
-        path "${sample_id}.read_counts.tsv", emit: read_counts
+        path "*.read_counts.tsv", emit: sample_read_counts
 
     script:
     """
-    echo "Collecting read counts for ${sample_id}"
-
-    singularity run --bind /data1:/data1 --bind /scratch:/scratch ${gatk_sif} gatk CollectReadCounts \\
+    gatk CollectReadCounts \\
         -L ${interval_list} \\
-        -R ${ref_fasta} \\
+        -R ${fasta} \\
         -imr OVERLAPPING_ONLY \\
         -I ${bam_file} \\
         --format TSV \\
         -O ${sample_id}.read_counts.tsv
-
+    
     echo "Read counts collected: ${sample_id}.read_counts.tsv"
     """
 }
@@ -38,7 +82,6 @@ process FILTER_GENOME {
     input:
         path(read_count_files)
         val genome_outdir
-        val gatk_sif
         path annotated_interval_list
         path interval_list
 
@@ -48,16 +91,16 @@ process FILTER_GENOME {
     script:
     def readcount_args = read_count_files.collect { "-I ${it}" }.join(' ')
     """
-    echo "Filtering genome intervals based on read count distribution"
+    echo "Filtering genome intervals based on sample read count distribution.."
 
-    singularity run --bind /data1:/data1 --bind /scratch:/scratch ${gatk_sif} gatk FilterIntervals \\
+    gatk FilterIntervals \\
         -L ${interval_list} \\
         --annotated-intervals ${annotated_interval_list} \\
         -imr OVERLAPPING_ONLY \\
         -O grch37_clean.annotated.filtered.interval_list \\
         ${readcount_args}
 
-    echo "Filtered interval list created"
+    echo "Sample specific filtered interval list created."
     """
 }
 
@@ -70,7 +113,6 @@ process SCATTER_GENOME {
     input:
         val scatter_count
         val scatter_outdir
-        val gatk_sif
         path filtered_interval_list
 
     output:
@@ -80,7 +122,7 @@ process SCATTER_GENOME {
     """
     echo "Scattering genome intervals into ${scatter_count} shards"
 
-    singularity run --bind /data1:/data1 --bind /scratch:/scratch ${gatk_sif} gatk IntervalListTools \\
+    gatk IntervalListTools \\
         --INPUT ${filtered_interval_list} \\
         --SUBDIVISION_MODE INTERVAL_COUNT \\
         --SCATTER_COUNT ${scatter_count} \\
@@ -108,7 +150,6 @@ process DETERMINE_PLOIDY {
         path(read_count_files)
         val model_outdir
         val model_prefix
-        val gatk_sif
         path filtered_interval_list
         path ploidy_priors
 
@@ -120,7 +161,7 @@ process DETERMINE_PLOIDY {
     """
     echo "Determining germline contig ploidy from ${read_count_files.size()} samples"
 
-    singularity run --bind /data1:/data1 --bind /scratch:/scratch ${gatk_sif} gatk DetermineGermlineContigPloidy \\
+    gatk DetermineGermlineContigPloidy \\
         -L ${filtered_interval_list} \\
         -imr OVERLAPPING_ONLY \\
         ${readcount_args} \\
@@ -148,7 +189,7 @@ process DETERMINE_PLOIDY_CASE {
 
     script:
     """
-    singularity run --bind /data1:/data1 --bind /scratch:/scratch ${params.gatk_sif} gatk DetermineGermlineContigPloidy \\
+    gatk DetermineGermlineContigPloidy \\
         --model ${params.model_outdir}/${params.model_prefix}-model\\
         -I ${params.sample_outdir}/${sample_id}.read_counts.tsv \\
         -O ${params.sample_outdir} \\
@@ -173,7 +214,7 @@ process CALL_CNVS_CASE {
     script:
     """
     mkdir -p ${params.sample_outdir}/cnvs
-    singularity run --bind /data1:/data1 --bind /scratch:/scratch ${params.gatk_sif} gatk GermlineCNVCaller \\
+    gatk GermlineCNVCaller \\
         --run-mode CASE \\
         --contig-ploidy-calls ${params.model_outdir}/${params.model_prefix}-calls \\
         --model ${params.cnvs_outdir}/${params.cnvs_prefix}_${interval_id}_of${params.scatter_count}-model \\
@@ -198,7 +239,6 @@ process POSTPROCESS_CNVS {
         val model_outdir
         val model_prefix
         val genome_outdir
-        val gatk_sif
         val pedigree
 
     output:
@@ -211,7 +251,7 @@ process POSTPROCESS_CNVS {
     """
     echo "Postprocessing CNVs for sample ${sample_id} (index ${sample_index})"
 
-    singularity run --bind /data1:/data1 --bind /scratch:/scratch ${gatk_sif} gatk postprocessGermlineCNVCalls \\
+    gatk postprocessGermlineCNVCalls \\
         --sample-index ${sample_index} \\
         --allosomal-contig X \\
         --allosomal-contig Y \\
