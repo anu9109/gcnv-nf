@@ -144,7 +144,8 @@ workflow GATK_GCNV {
             bams_channel,
             outdir,
             PREPROCESS_GENOME_FASTA.out.interval_list,
-            PREPROCESS_GENOME_FASTA.out.ref_fasta
+            PREPROCESS_GENOME_FASTA.out.ref_fasta,
+            PREPROCESS_GENOME_FASTA.out.fasta_index
         )
 
         // Step 3: Filter genome intervals based on read count outliers
