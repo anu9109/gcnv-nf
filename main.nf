@@ -109,7 +109,7 @@ include { JOINT_CNVS_SEGMENTATION } from './modules/gatk.nf'
 workflow GATK_GCNV {
     take:
         bams_channel             // channel of [sample_id, bam_file] tuples
-        sample_outdir            // val: output directory for samples
+        outdir            // val: output directory for samples
         gr37_fasta_in            // val: path to reference genome fasta
         genome_outdir            // val: output directory for genome
         seqtk                    // val: path to seqtk
@@ -142,7 +142,7 @@ workflow GATK_GCNV {
         // Step 2: Collect read counts from samples
         COLLECT_READ_COUNTS(
             bams_channel,
-            sample_outdir,
+            outdir,
             PREPROCESS_GENOME_FASTA.out.interval_list,
             PREPROCESS_GENOME_FASTA.out.ref_fasta
         )
@@ -180,7 +180,7 @@ workflow GATK_GCNV {
             .set { interval_ids }
 
         // Step 7: Call germline CNVs in cohort mode
-        COLLECT_READ_COUNTS.out.read_counts.collect().set { all_read_counts }
+        COLLECT_READ_COUNTS.out.sample_read_counts.collect().set { all_read_counts }
 
         CALL_CNVS(
             all_read_counts,
@@ -226,7 +226,7 @@ workflow GATK_GCNV {
 
     emit:
         genome_fasta = PREPROCESS_GENOME_FASTA.out.ref_fasta
-        read_counts = COLLECT_READ_COUNTS.out.read_counts
+        read_counts = COLLECT_READ_COUNTS.out.sample_read_counts
         //ploidy_calls = DETERMINE_PLOIDY.out.ploidy_calls
         //cnv_calls = CALL_CNVS.out.cnv_calls
         //cnv_models = CALL_CNVS.out.cnv_model

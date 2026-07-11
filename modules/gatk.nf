@@ -49,11 +49,11 @@ process PREPROCESS_GENOME_FASTA {
 process COLLECT_READ_COUNTS {
 
     tag "Collect read counts from ${sample_id}"
-    publishDir "${params.sample_outdir}", mode: 'copy' 
+    publishDir "${params.outdir}", mode: 'copy' 
 
     input:
         tuple val(sample_id), val(bam_file)
-        val sample_outdir
+        val outdir
         path interval_list
         path ref_fasta
 
