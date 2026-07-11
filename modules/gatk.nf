@@ -57,6 +57,7 @@ process COLLECT_READ_COUNTS {
         path interval_list
         path ref_fasta
         path fasta_index
+        path ref_dict
 
     output:
         path "*.read_counts.tsv", emit: sample_read_counts
