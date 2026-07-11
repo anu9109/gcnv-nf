@@ -148,7 +148,7 @@ workflow GATK_GCNV {
         )
 
         // Step 3: Filter genome intervals based on read count outliers
-        COLLECT_READ_COUNTS.out.read_counts.collect().set { read_count_list }
+        COLLECT_READ_COUNTS.out.sample_read_counts.collect().set { read_count_list }
         FILTER_GENOME(
             read_count_list,
             genome_outdir,
@@ -166,7 +166,7 @@ workflow GATK_GCNV {
 
         // Step 5: Determine ploidy model - cohort mode
         DETERMINE_PLOIDY(
-            COLLECT_READ_COUNTS.out.read_counts.collect(),
+            COLLECT_READ_COUNTS.out.sample_read_counts.collect(),
             model_outdir,
             model_prefix,
             FILTER_GENOME.out.filtered_interval_list,
@@ -225,7 +225,7 @@ workflow GATK_GCNV {
     */
 
     emit:
-        genome_fasta = PREPROCESS_GENOME_FASTA.out.fasta
+        genome_fasta = PREPROCESS_GENOME_FASTA.out.ref_fasta
         read_counts = COLLECT_READ_COUNTS.out.read_counts
         //ploidy_calls = DETERMINE_PLOIDY.out.ploidy_calls
         //cnv_calls = CALL_CNVS.out.cnv_calls

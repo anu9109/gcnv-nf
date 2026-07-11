@@ -1,7 +1,7 @@
 
 process PREPROCESS_GENOME_FASTA {
 
-    publishDir "${params.genome_outdir}", mode: 'copy' 
+    publishDir "${params.outdir}/genome", mode: 'copy'
 
     input:
         val gr37_fasta_in
@@ -77,7 +77,7 @@ process COLLECT_READ_COUNTS {
 process FILTER_GENOME {
 
     tag "Filter genome intervals"
-    publishDir "${genome_outdir}", mode: 'copy'
+    publishDir "${params.outdir}/genome", mode: 'copy'
 
     input:
         path(read_count_files)
