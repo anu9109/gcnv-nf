@@ -10,6 +10,8 @@ include { FILTER_GENOME } from './modules/gatk.nf'
 include { SCATTER_GENOME } from './modules/gatk.nf'
 include { DETERMINE_PLOIDY_CASE } from './modules/gatk.nf'
 include { CALL_CNVS_CASE } from './modules/gatk.nf'
+include { POSTPROCESS_CNVS } from './modules/gatk.nf'
+include { JOINT_CNVS_SEGMENTATION } from './modules/gatk.nf'
 
 
 workflow {
