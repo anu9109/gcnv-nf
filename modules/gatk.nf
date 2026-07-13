@@ -20,6 +20,7 @@ process PREPROCESS_GENOME_FASTA {
 
     script:
     """
+    export JAVA_TOOL_OPTIONS="-XX:+PerfDisableSharedMem -Djava.io.tmpdir=\$PWD"
     echo "1. Subsetting genome fasta to only chromosomes 1-22, X and Y.."
     ${seqtk} subseq ${gr37_fasta_in} ${genome_chrs} > gr37_clean.fasta
     
@@ -64,6 +65,7 @@ process COLLECT_READ_COUNTS {
 
     script:
     """
+    export JAVA_TOOL_OPTIONS="-XX:+PerfDisableSharedMem -Djava.io.tmpdir=\$PWD"
     gatk CollectReadCounts \\
         -L ${interval_list} \\
         -R ${ref_fasta} \\
@@ -93,6 +95,7 @@ process FILTER_GENOME {
     script:
     def readcount_args = read_count_files.collect { "-I ${it}" }.join(' ')
     """
+    export JAVA_TOOL_OPTIONS="-XX:+PerfDisableSharedMem -Djava.io.tmpdir=\$PWD"
     echo "Filtering genome intervals based on sample read count distribution.."
 
     gatk FilterIntervals \\
@@ -120,6 +123,8 @@ process SCATTER_GENOME {
 
     script:
     """
+    export JAVA_TOOL_OPTIONS="-XX:+PerfDisableSharedMem -Djava.io.tmpdir=\$PWD"
+    
     echo "Scattering genome intervals into ${scatter_count} shards"
 
     gatk IntervalListTools \\
@@ -156,6 +161,10 @@ process DETERMINE_PLOIDY_CASE {
 
     script:
     """
+    export JAVA_TOOL_OPTIONS="-XX:+PerfDisableSharedMem -Djava.io.tmpdir=\$PWD"
+    mkdir -p \$PWD/.pytensor
+    export PYTENSOR_FLAGS="base_compiledir=\$PWD/.pytensor"
+    
     gatk DetermineGermlineContigPloidy \\
         --model ${model_ploidy_outdir}-model \\
         -I ${sample_read_counts} \\
@@ -190,6 +199,10 @@ process CALL_CNVS_CASE {
 
     script:
     """
+    export JAVA_TOOL_OPTIONS="-XX:+PerfDisableSharedMem -Djava.io.tmpdir=\$PWD"
+    mkdir -p \$PWD/.pytensor
+    export PYTENSOR_FLAGS="base_compiledir=\$PWD/.pytensor"
+    
     gatk GermlineCNVCaller \\
         --run-mode CASE \\
         --input ${sample_read_counts} \\
@@ -224,6 +237,10 @@ process POSTPROCESS_CNVS {
     def calls_shard_args = calls_list.sort().collect { "--calls-shard-path ${it}" }.join(' ')
     def model_shard_args = models_list.sort().collect { "--model-shard-path ${it}" }.join(' ')
     """
+    export JAVA_TOOL_OPTIONS="-XX:+PerfDisableSharedMem -Djava.io.tmpdir=\$PWD"
+    mkdir -p \$PWD/.pytensor
+    export PYTENSOR_FLAGS="base_compiledir=\$PWD/.pytensor"
+    
     echo "Postprocessing CNVs for sample ${sample_id}"
 
     gatk PostprocessGermlineCNVCalls \\
@@ -258,6 +275,10 @@ process JOINT_CNVS_SEGMENTATION {
 
     script:
     """
+    export JAVA_TOOL_OPTIONS="-XX:+PerfDisableSharedMem -Djava.io.tmpdir=\$PWD"
+    mkdir -p \$PWD/.pytensor
+    export PYTENSOR_FLAGS="base_compiledir=\$PWD/.pytensor"
+    
     gatk JointGermlineCNVSegmentation \\
         -R ${ref_fasta} \\
         -V ${segment_vcf} \\
