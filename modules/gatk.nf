@@ -156,15 +156,13 @@ process DETERMINE_PLOIDY_CASE {
 
     script:
     """
-    export PYTENSOR_FLAGS="base_compiledir=\$PWD/.pytensor"
-    mkdir -p \$PWD/.pytensor
     gatk DetermineGermlineContigPloidy \\
         --model ${model_ploidy_outdir}-model \\
         -I ${sample_read_counts} \\
         -O . \\
         --output-prefix ${sample_id}_ploidy
     """
-}
+}   
 
 
 process CALL_CNVS_CASE {

@@ -36,6 +36,7 @@ workflow {
         .combine(interval_ids)
         .map { row -> tuple(row[0], row[1], row[2]) }
         .set { sample_id_intervals_ch }
+    pedigree = file("${params.outdir}/pedigree.txt")
     GATK_GCNV(
         bams_channel,
         params.outdir,
@@ -49,7 +50,7 @@ workflow {
         sample_id_intervals_ch, 
         params.model_ploidy_outdir,
         params.model_cnvs_outdir,
-        params.pedigree
+        pedigree
     )
 }
 
