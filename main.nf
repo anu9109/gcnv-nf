@@ -50,6 +50,7 @@ workflow {
         sample_id_intervals_ch, 
         params.model_ploidy_outdir,
         params.model_cnvs_outdir,
+        interval_ids,
         pedigree
     )
 }
@@ -140,6 +141,7 @@ workflow GATK_GCNV {
         sample_id_intervals_ch            
         model_ploidy_outdir
         model_cnvs_outdir
+        interval_ids
         pedigree
         //model_outdir             // val: output directory for models
         //model_prefix             // val: prefix for model output files
@@ -209,9 +211,11 @@ workflow GATK_GCNV {
         POSTPROCESS_CNVS(
             bams_channel,
             CALL_CNVS_CASE.out.cnv_calls_dir.collect(), 
-            CALL_CNVS_CASE.out.cnv_model_dir.collect(),
+            model_cnvs_outdir,
             PREPROCESS_GENOME_FASTA.out.dict,
-            DETERMINE_PLOIDY_CASE.out.ploidy_calls
+            DETERMINE_PLOIDY_CASE.out.ploidy_calls,
+            interval_ids.collect(),
+            scatter_count
         )  
 
         // Step 8: Joint cohort segmentation

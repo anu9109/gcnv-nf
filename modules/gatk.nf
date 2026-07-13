@@ -195,7 +195,6 @@ process CALL_CNVS_CASE {
 
     output:
         path "${sample_id}_cnv_${interval_id}_of_${scatter_count}-calls", emit: cnv_calls_dir
-        path "${sample_id}_cnv_${interval_id}_of_${scatter_count}-model", emit: cnv_model_dir
 
     script:
     """
@@ -207,7 +206,7 @@ process CALL_CNVS_CASE {
         --run-mode CASE \\
         --input ${sample_read_counts} \\
         --contig-ploidy-calls ${ploidy_calls} \\
-        --model ${model_cnvs_outdir}_${interval_id}_of_${scatter_count}-model \\
+        --model ${model_cnvs_outdir}_${interval_id}_of${scatter_count}-model \\
         --output . \\
         --output-prefix ${sample_id}_cnv_${interval_id}_of_${scatter_count}
     """
@@ -221,10 +220,12 @@ process POSTPROCESS_CNVS {
 
     input:
         tuple val(sample_id), val(bam_file)
-        path cnv_calls_dir
-        path cnv_model_dir
+        path cnv_calls_dir // directory for each scatter of the case analysis
+        val model_cnvs_outdir // directory for each scatter of the cohort model
         path dict 
         path ploidy_calls
+        val interval_ids
+        val scatter_count
 
     output:
         path "${sample_id}_genotyped-intervals.vcf.gz", emit: genotyped_intervals
@@ -233,9 +234,8 @@ process POSTPROCESS_CNVS {
 
     script:
     def calls_list = cnv_calls_dir instanceof List ? cnv_calls_dir : [cnv_calls_dir]
-    def models_list = cnv_model_dir instanceof List ? cnv_model_dir : [cnv_model_dir]
     def calls_shard_args = calls_list.sort().collect { "--calls-shard-path ${it}" }.join(' ')
-    def model_shard_args = models_list.sort().collect { "--model-shard-path ${it}" }.join(' ')
+    def model_shard_args = interval_ids.collect { "--model-shard-path ${model_cnvs_outdir}_${it}_of${scatter_count}-model" }.join(' ')
     """
     export JAVA_TOOL_OPTIONS="-XX:+PerfDisableSharedMem -Djava.io.tmpdir=\$PWD"
     mkdir -p \$PWD/.pytensor
@@ -278,7 +278,7 @@ process JOINT_CNVS_SEGMENTATION {
     export JAVA_TOOL_OPTIONS="-XX:+PerfDisableSharedMem -Djava.io.tmpdir=\$PWD"
     mkdir -p \$PWD/.pytensor
     export PYTENSOR_FLAGS="base_compiledir=\$PWD/.pytensor"
-    
+
     gatk JointGermlineCNVSegmentation \\
         -R ${ref_fasta} \\
         -V ${segment_vcf} \\
