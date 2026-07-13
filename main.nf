@@ -44,6 +44,7 @@ workflow {
         params.mappability_bed,
         params.segmental_duplication_bed, 
         scatter_count,
+        sample_id_intervals_ch, 
         params.model_ploidy_outdir,
         params.model_cnvs_outdir
     )
@@ -131,7 +132,8 @@ workflow GATK_GCNV {
         genome_chrs              // val: path to genome chromosomes file
         mappability_bed          // val: path to mappability BED
         segmental_duplication_bed // val: path to segmental duplication BED
-        scatter_count            // val: number of intervals
+        scatter_count
+        sample_id_intervals_ch            
         model_ploidy_outdir
         model_cnvs_outdir
         //model_outdir             // val: output directory for models
@@ -192,8 +194,8 @@ workflow GATK_GCNV {
         // Step 6: Call germline CNVs in case mode
         CALL_CNVS_CASE(
             sample_id_intervals_ch,
-            COLLECT_READ_COUNTS.out.sample_read_counts,
-            DETERMINE_PLOIDY_CASE.out.ploidy_calls,
+            COLLECT_READ_COUNTS.out.sample_read_counts.first(),
+            DETERMINE_PLOIDY_CASE.out.ploidy_calls.first(),
             scatter_count, 
             model_cnvs_outdir
         )

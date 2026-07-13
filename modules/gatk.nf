@@ -149,7 +149,7 @@ process DETERMINE_PLOIDY_CASE {
     input: 
         tuple val(sample_id), val(bam_file)
         path sample_read_counts
-        path model_ploidy_outdir
+        val model_ploidy_outdir
 
     output:
         path "${sample_id}_ploidy", emit: ploidy_calls
@@ -175,14 +175,14 @@ process CALL_CNVS_CASE {
         return base * Math.pow(2, task.attempt - 1)
     }
 
-    publishDir "$${params.outdir}/cnvs", mode: 'copy'
+    publishDir "${params.outdir}/cnvs", mode: 'copy'
 
     input:
         tuple val(sample_id), val(bam_file), val (interval_id)
         path sample_read_counts
         path ploidy_calls
         val scatter_count
-        path model_cnvs_outdir
+        val model_cnvs_outdir
 
     output:
         path "${sample_id}_case_cnvs_${interval_id}_of_${params.scatter_count}-calls", emit: cnv_calls, optional: true
@@ -196,40 +196,5 @@ process CALL_CNVS_CASE {
         --model ${model_cnvs_outdir}_${interval_id}_of_${scatter_count}-model \\
         --output . \\
         --output-prefix ${sample_id}_case_cnvs_${interval_id}_of_${scatter_count}
-    """
-}
-
-process POSTPROCESS_CNVS {
-
-    tag "Postprocess CNVs for sample ${sample_id}"
-    publishDir "${params.outdir}/cnvs", mode: 'copy'
-
-    input:
-        tuple val(sample_id), val(bam_file)
-        val interval_ids
-        val scatter_count
-
-    output:
-        path "${sample_id}_genotyped-intervals.vcf.gz", emit: genotyped_intervals
-        path "${sample_id}_denoised_copy_ratios.tsv", emit: denoised_copy_ratios
-
-    script:
-    def model_shard_args = interval_ids.collect { "--model-shard-path ${params.outdir}/cnvs/${sample_id}_case_cnvs_${it}_of_${scatter_count}-model" }.join(' ')
-    def calls_shard_args = interval_ids.collect { "--calls-shard-path ${params.outdir}/cnvs/${sample_id}_case_cnvs_${it}_of_${scatter_count}-calls" }.join(' ')
-    """
-    echo "Postprocessing CNVs for sample ${sample_id}"
-
-    gatk postprocessGermlineCNVCalls \\
-        --sample-index 1 \\
-        --allosomal-contig X \\
-        --allosomal-contig Y \\
-        --contig-ploidy-calls ${params.outdir}/model/${model_prefix}-calls \\
-        --output-genotyped-intervals ${sample_id}_genotyped-intervals.vcf.gz \\
-        --output-genotyped-segments ${sample_id}_genotyped-segments.vcf.gz \\
-        --output-denoised-copy-ratios ${sample_id}_denoised_copy_ratios.tsv \\
-        --sequence-dictionary ${params.outdir}/genome/gr37_clean.dict \\
-        ${model_shard_args} \\
-        ${calls_shard_args}
-
     """
 }
