@@ -152,10 +152,13 @@ process DETERMINE_PLOIDY_CASE {
         val model_ploidy_outdir
 
     output:
-        path "${sample_id}_ploidy", emit: ploidy_calls
+        path "${sample_id}_ploidy-calls", emit: ploidy_calls
+        path "${sample_id}_ploidy-model", emit: ploidy_model
 
     script:
     """
+    export PYTENSOR_FLAGS="base_compiledir=\$PWD/.pytensor"
+    mkdir -p \$PWD/.pytensor
     gatk DetermineGermlineContigPloidy \\
         --model ${model_ploidy_outdir}-model\\
         -I ${sample_read_counts} \\
@@ -185,16 +188,84 @@ process CALL_CNVS_CASE {
         val model_cnvs_outdir
 
     output:
-        path "${sample_id}_case_cnvs_${interval_id}_of_${params.scatter_count}-calls", emit: cnv_calls, optional: true
+        path "${sample_id}_cnv_${interval_id}_of_${scatter_count}-calls", emit: cnv_calls_dir
+        path "${sample_id}_cnv_${interval_id}_of_${scatter_count}-model", emit: cnv_model_dir
 
     script:
     """
     gatk GermlineCNVCaller \\
         --run-mode CASE \\
         --input ${sample_read_counts} \\
-        --contig-ploidy-calls ${ploidy_calls}-calls \\
+        --contig-ploidy-calls ${ploidy_calls} \\
         --model ${model_cnvs_outdir}_${interval_id}_of_${scatter_count}-model \\
         --output . \\
-        --output-prefix ${sample_id}_case_cnvs_${interval_id}_of_${scatter_count}
+        --output-prefix ${sample_id}_cnv_${interval_id}_of_${scatter_count}
+    """
+}
+
+
+process POSTPROCESS_CNVS {
+
+    tag "Postprocess CNVs for sample ${sample_id}"
+    publishDir "${params.outdir}/cnvs", mode: 'copy'
+
+    input:
+        tuple val(sample_id), val(bam_file)
+        path cnv_calls_dir
+        path cnv_model_dir
+        path dict 
+        path ploidy_calls
+
+    output:
+        path "${sample_id}_genotyped-intervals.vcf.gz", emit: genotyped_intervals
+        path "${sample_id}_genotyped-segments.vcf.gz", emit: genotyped_segments
+        path "${sample_id}_denoised_copy_ratios.tsv", emit: denoised_copy_ratios
+
+    script:
+    def calls_list = cnv_calls_dir instanceof List ? cnv_calls_dir : [cnv_calls_dir]
+    def models_list = cnv_model_dir instanceof List ? cnv_model_dir : [cnv_model_dir]
+    def calls_shard_args = calls_list.sort().collect { "--calls-shard-path ${it}" }.join(' ')
+    def model_shard_args = models_list.sort().collect { "--model-shard-path ${it}" }.join(' ')
+    """
+    echo "Postprocessing CNVs for sample ${sample_id}"
+
+    gatk PostprocessGermlineCNVCalls \\
+        --sample-index 0 \\
+        --allosomal-contig X \\
+        --allosomal-contig Y \\
+        --contig-ploidy-calls ${ploidy_calls} \\
+        --output-genotyped-intervals ${sample_id}_genotyped-intervals.vcf.gz \\
+        --output-genotyped-segments ${sample_id}_genotyped-segments.vcf.gz \\
+        --output-denoised-copy-ratios ${sample_id}_denoised_copy_ratios.tsv \\
+        --sequence-dictionary ${dict} \\
+        ${model_shard_args} \\
+        ${calls_shard_args}
+    """
+}
+
+process JOINT_CNVS_SEGMENTATION {
+
+    tag "Joint CNV segmentation for sample ${sample_id}"
+    publishDir "${params.outdir}", mode: 'copy'
+
+    input: 
+        tuple val(sample_id), val(bam_file)
+        path segment_vcf
+        path ref_fasta
+        path fasta_index
+        path filtered_interval_list
+        val pedigree
+
+    output: 
+        path "${sample_id}_clustered.vcf.gz", emit: clustered_vcf
+
+    script:
+    """
+    gatk JointGermlineCNVSegmentation \\
+        -R ${ref_fasta} \\
+        -V ${segment_vcf} \\
+        --model-call-intervals ${filtered_interval_list} \\
+        --pedigree ${pedigree} \\
+        -O ${sample_id}_clustered.vcf.gz
     """
 }
