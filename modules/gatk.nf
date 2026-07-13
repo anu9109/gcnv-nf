@@ -106,3 +106,130 @@ process FILTER_GENOME {
     """
 }
 
+process SCATTER_GENOME {
+
+    tag "Scatter genome intervals into ${scatter_count} shards"
+    publishDir "${params.outdir}/scatter", mode: 'copy'
+
+    input:
+        val scatter_count
+        path filtered_interval_list
+
+    output:
+        path "temp_*", emit: scattered_intervals, type: 'dir'
+
+    script:
+    """
+    echo "Scattering genome intervals into ${scatter_count} shards"
+
+    gatk IntervalListTools \\
+        --INPUT ${filtered_interval_list} \\
+        --SUBDIVISION_MODE INTERVAL_COUNT \\
+        --SCATTER_COUNT ${scatter_count} \\
+        --OUTPUT .
+
+    echo "Scattered intervals created"
+    ls -la temp_*/
+    """
+}
+
+process DETERMINE_PLOIDY_CASE {
+    
+    tag "Determine germline contig ploidy on sample ${sample_id}"
+    errorStrategy 'retry'   
+    maxRetries 3
+    memory {
+        // Base memory (8 GB), doubled for each retry attempt
+        def base = 8.GB
+        return base * Math.pow(2, task.attempt - 1)
+    }
+
+    publishDir "${params.outdir}", mode: 'copy'
+
+    input: 
+        tuple val(sample_id), val(bam_file)
+        path sample_read_counts
+        path model_ploidy_outdir
+
+    output:
+        path "${sample_id}_ploidy", emit: ploidy_calls
+
+    script:
+    """
+    gatk DetermineGermlineContigPloidy \\
+        --model ${model_ploidy_outdir}-model\\
+        -I ${sample_read_counts} \\
+        -O . \\
+        --output-prefix ${sample_id}_ploidy
+    """
+}
+
+
+process CALL_CNVS_CASE {
+
+    tag "Calling CNVs on sample ${sample_id}"
+    errorStrategy 'retry'
+    maxRetries 2
+    memory {
+        def base = 32.GB
+        return base * Math.pow(2, task.attempt - 1)
+    }
+
+    publishDir "$${params.outdir}/cnvs", mode: 'copy'
+
+    input:
+        tuple val(sample_id), val(bam_file), val (interval_id)
+        path sample_read_counts
+        path ploidy_calls
+        val scatter_count
+        path model_cnvs_outdir
+
+    output:
+        path "${sample_id}_case_cnvs_${interval_id}_of_${params.scatter_count}-calls", emit: cnv_calls, optional: true
+
+    script:
+    """
+    gatk GermlineCNVCaller \\
+        --run-mode CASE \\
+        --input ${sample_read_counts} \\
+        --contig-ploidy-calls ${ploidy_calls}-calls \\
+        --model ${model_cnvs_outdir}_${interval_id}_of_${scatter_count}-model \\
+        --output . \\
+        --output-prefix ${sample_id}_case_cnvs_${interval_id}_of_${scatter_count}
+    """
+}
+
+process POSTPROCESS_CNVS {
+
+    tag "Postprocess CNVs for sample ${sample_id}"
+    publishDir "${params.outdir}/cnvs", mode: 'copy'
+
+    input:
+        tuple val(sample_id), val(bam_file)
+        val interval_ids
+        val scatter_count
+
+    output:
+        path "${sample_id}_genotyped-intervals.vcf.gz", emit: genotyped_intervals
+        path "${sample_id}_denoised_copy_ratios.tsv", emit: denoised_copy_ratios
+
+    script:
+    def model_shard_args = interval_ids.collect { "--model-shard-path ${params.outdir}/cnvs/${sample_id}_case_cnvs_${it}_of_${scatter_count}-model" }.join(' ')
+    def calls_shard_args = interval_ids.collect { "--calls-shard-path ${params.outdir}/cnvs/${sample_id}_case_cnvs_${it}_of_${scatter_count}-calls" }.join(' ')
+    """
+    echo "Postprocessing CNVs for sample ${sample_id}"
+
+    gatk postprocessGermlineCNVCalls \\
+        --sample-index 1 \\
+        --allosomal-contig X \\
+        --allosomal-contig Y \\
+        --contig-ploidy-calls ${params.outdir}/model/${model_prefix}-calls \\
+        --output-genotyped-intervals ${sample_id}_genotyped-intervals.vcf.gz \\
+        --output-genotyped-segments ${sample_id}_genotyped-segments.vcf.gz \\
+        --output-denoised-copy-ratios ${sample_id}_denoised_copy_ratios.tsv \\
+        --sequence-dictionary ${params.outdir}/genome/gr37_clean.dict \\
+        ${model_shard_args} \\
+        ${calls_shard_args}
+
+    """
+}

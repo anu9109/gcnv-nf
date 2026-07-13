@@ -7,6 +7,10 @@ include { CNMOPS_TO_VCF } from './modules/cnmops.nf'
 include { PREPROCESS_GENOME_FASTA } from './modules/gatk.nf'
 include { COLLECT_READ_COUNTS } from './modules/gatk.nf'
 include { FILTER_GENOME } from './modules/gatk.nf'
+include { SCATTER_GENOME } from './modules/gatk.nf'
+include { DETERMINE_PLOIDY_CASE } from './modules/gatk.nf'
+include { CALL_CNVS_CASE } from './modules/gatk.nf'
+
 
 workflow {
     
@@ -22,6 +26,14 @@ workflow {
     // create bams_channel of [sample_id, bam_file]
     bams_channel = Channel.of(tuple(params.sample_id, file(params.bam_file)))
     genome_outdir = file("${params.outdir}/genome")
+    scatter_count = params.scatter_count as int
+    interval_ids = Channel
+        .from(1..scatter_count)
+        .map { String.format("%04d", it) }
+    bams_channel
+        .combine(interval_ids)
+        .map { row -> tuple(row[0], row[1], row[2]) }
+        .set { sample_id_intervals_ch }
     GATK_GCNV(
         bams_channel,
         params.outdir,
@@ -30,7 +42,10 @@ workflow {
         params.seqtk,         
         params.genome_chrs, 
         params.mappability_bed,
-        params.segmental_duplication_bed
+        params.segmental_duplication_bed, 
+        scatter_count,
+        params.model_ploidy_outdir,
+        params.model_cnvs_outdir
     )
 }
 
@@ -116,15 +131,17 @@ workflow GATK_GCNV {
         genome_chrs              // val: path to genome chromosomes file
         mappability_bed          // val: path to mappability BED
         segmental_duplication_bed // val: path to segmental duplication BED
-        //scatter_count            // val: number of intervals
-        //cnvs_outdir              // val: output directory for CNV calls
+        scatter_count            // val: number of intervals
+        model_ploidy_outdir
+        model_cnvs_outdir
         //model_outdir             // val: output directory for models
+        //model_prefix             // val: prefix for model output files
+        //cnvs_prefix              // val: prefix for CNV output files
+        //cnvs_outdir              // val: output directory for CNV calls
         //scatter_outdir           // val: output directory for scattered intervals
         //outdir                   // val: final output directory
         //gatk_sif                 // val: path to gatk singularity container
         //hg19_ploidy_priors       // val: path to ploidy priors file
-        //model_prefix             // val: prefix for model output files
-        //cnvs_prefix              // val: prefix for CNV output files
         //pedigree                 // val: path to pedigree file
 
     main:
@@ -158,72 +175,35 @@ workflow GATK_GCNV {
             PREPROCESS_GENOME_FASTA.out.interval_list
         )
 
-    /*
         // Step 4: Scatter genome intervals into shards
         SCATTER_GENOME(
             scatter_count,
-            scatter_outdir,
             FILTER_GENOME.out.filtered_interval_list
         )
 
-        // Step 5: Determine ploidy model - cohort mode
-        DETERMINE_PLOIDY(
-            COLLECT_READ_COUNTS.out.sample_read_counts.collect(),
-            model_outdir,
-            model_prefix,
-            FILTER_GENOME.out.filtered_interval_list,
-            hg19_ploidy_priors
+    
+        // Step 5: Determine ploidy model - case mode
+        DETERMINE_PLOIDY_CASE(
+            bams_channel,
+            COLLECT_READ_COUNTS.out.sample_read_counts,
+            model_ploidy_outdir
         )
 
-        // Step 6: Create channel for interval IDs
-        Channel
-            .from(1..scatter_count)
-            .map { String.format("%04d", it) }
-            .set { interval_ids }
-
-        // Step 7: Call germline CNVs in cohort mode
-        COLLECT_READ_COUNTS.out.sample_read_counts.collect().set { all_read_counts }
-
-        CALL_CNVS(
-            all_read_counts,
-            interval_ids.flatten(),
-            scatter_count,
-            cnvs_outdir,
-            cnvs_prefix,
-            model_outdir,
-            model_prefix,
-            scatter_outdir
+        // Step 6: Call germline CNVs in case mode
+        CALL_CNVS_CASE(
+            sample_id_intervals_ch,
+            COLLECT_READ_COUNTS.out.sample_read_counts,
+            DETERMINE_PLOIDY_CASE.out.ploidy_calls,
+            scatter_count, 
+            model_cnvs_outdir
         )
-
-        // Step 8: Create sample index and sample ID mapping
-        bams_channel
-            .toList()
-            .flatMap { samples ->
-                samples.eachWithIndex { sample, idx ->
-                    tuple(idx, sample[0])
-                }
-            }
-            .set { sample_info }
-
-        // Step 9: Postprocess CNVs per sample
-        sample_info
-            .combine(Channel.value(interval_ids.toList()))
-            .set { sample_intervals }
-
+    /*
+        // Step 7: Postprocess CNVs
         POSTPROCESS_CNVS(
-            sample_info,
-            interval_ids.toList(),
-            cnvs_outdir,
-            cnvs_prefix,
-            scatter_count,
-            model_outdir,
-            model_prefix,
-            genome_outdir,
-            pedigree
-        )
-
-        // Step 10: Create joint CNV segmentation
-        POSTPROCESS_CNVS.out.genotyped_intervals.collect().set { vcfs }
+            bams_channel,
+            interval_ids,
+            scatter_count
+        )  
     */
 
     emit:
