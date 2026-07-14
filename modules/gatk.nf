@@ -216,7 +216,7 @@ process CALL_CNVS_CASE {
 process POSTPROCESS_CNVS {
 
     tag "Postprocess CNVs for sample ${sample_id}"
-    publishDir "${params.outdir}/cnvs", mode: 'copy'
+    publishDir "${params.outdir}", mode: 'copy'
 
     input:
         tuple val(sample_id), val(bam_file)
@@ -267,6 +267,7 @@ process JOINT_CNVS_SEGMENTATION {
         path segment_vcf
         path ref_fasta
         path fasta_index
+        path dict
         path filtered_interval_list
         val pedigree
 

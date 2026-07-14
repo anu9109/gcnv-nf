@@ -224,6 +224,7 @@ workflow GATK_GCNV {
             POSTPROCESS_CNVS.out.genotyped_segments.first(),
             PREPROCESS_GENOME_FASTA.out.ref_fasta,
             PREPROCESS_GENOME_FASTA.out.fasta_index,
+            PREPROCESS_GENOME_FASTA.out.dict,
             FILTER_GENOME.out.filtered_interval_list,
             pedigree
         )
