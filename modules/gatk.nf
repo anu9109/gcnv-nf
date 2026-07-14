@@ -252,6 +252,7 @@ process POSTPROCESS_CNVS {
         --output-genotyped-segments ${sample_id}_genotyped-segments.vcf.gz \\
         --output-denoised-copy-ratios ${sample_id}_denoised_copy_ratios.tsv \\
         --sequence-dictionary ${dict} \\
+        --create-output-variant-index \\
         ${model_shard_args} \\
         ${calls_shard_args}
     """
@@ -285,6 +286,7 @@ process JOINT_CNVS_SEGMENTATION {
         -V ${segment_vcf} \\
         --model-call-intervals ${filtered_interval_list} \\
         --pedigree ${pedigree} \\
+        --create-output-variant-index \\
         -O ${sample_id}_clustered.vcf.gz
     """
 }
