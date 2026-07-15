@@ -24,7 +24,7 @@ process SURVIVOR_MERGE {
     echo "${sample_id}_genotyped-segments.vcf" >> ${sample_id}.vcfs.txt
 
     # Run SURVIVOR merge
-    SURVIVOR merge \\
+    ${params.survivor_bin} merge \\
         ${sample_id}.vcfs.txt \\
         10000 \\
         1 \\

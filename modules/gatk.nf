@@ -1,15 +1,10 @@
 
 process PREPROCESS_GENOME_FASTA {
 
-    publishDir "${params.outdir}/genome", mode: 'copy'
+    publishDir "${outdir_gatk}/genome", mode: 'copy'
 
     input:
         val gr37_fasta_in
-        val genome_outdir
-        val seqtk
-        val genome_chrs
-        val mappability_bed
-        val segmental_duplication_bed
 
     output:
         path "gr37_clean.fasta", emit: ref_fasta
@@ -22,7 +17,7 @@ process PREPROCESS_GENOME_FASTA {
     """
     export JAVA_TOOL_OPTIONS="-XX:+PerfDisableSharedMem -Djava.io.tmpdir=\$PWD"
     echo "1. Subsetting genome fasta to only chromosomes 1-22, X and Y.."
-    ${seqtk} subseq ${gr37_fasta_in} ${genome_chrs} > gr37_clean.fasta
+    ${params.seqtk} subseq ${gr37_fasta_in} ${params.genome_chrs} > gr37_clean.fasta
     
     echo "2. Indexing genome fasta.."
     samtools faidx gr37_clean.fasta
@@ -39,8 +34,8 @@ process PREPROCESS_GENOME_FASTA {
     echo "5. Annotating intervals with GC %, mappability and segmental duplication content.."
     gatk AnnotateIntervals -L gr37_clean.interval_list \\
         -R gr37_clean.fasta \\
-        --mappability-track ${mappability_bed} \\
-        --segmental-duplication-track ${segmental_duplication_bed} \\
+        --mappability-track ${params.mappability_bed} \\
+        --segmental-duplication-track ${params.segmental_duplication_bed} \\
         -imr OVERLAPPING_ONLY \\
         -O gr37_clean_annotated.interval_list
     """
@@ -50,7 +45,7 @@ process PREPROCESS_GENOME_FASTA {
 process COLLECT_READ_COUNTS {
 
     tag "Collect read counts from ${sample_id}"
-    publishDir "${params.outdir}", mode: 'copy' 
+    publishDir "${outdir_gatk}", mode: 'copy' 
 
     input:
         tuple val(sample_id), val(bam_file)
@@ -81,11 +76,10 @@ process COLLECT_READ_COUNTS {
 process FILTER_GENOME {
 
     tag "Filter genome intervals"
-    publishDir "${params.outdir}/genome", mode: 'copy'
+    publishDir "${outdir_gatk}/genome", mode: 'copy'
 
     input:
         path(read_count_files)
-        val genome_outdir
         path annotated_interval_list
         path interval_list
 
@@ -112,7 +106,7 @@ process FILTER_GENOME {
 process SCATTER_GENOME {
 
     tag "Scatter genome intervals into ${scatter_count} shards"
-    publishDir "${params.outdir}/scatter", mode: 'copy'
+    publishDir "${outdir_gatk}/scatter", mode: 'copy'
 
     input:
         val scatter_count
@@ -149,7 +143,7 @@ process DETERMINE_PLOIDY_CASE {
         return base * Math.pow(2, task.attempt - 1)
     }
 
-    publishDir "${params.outdir}", mode: 'copy'
+    publishDir "${outdir_gatk}", mode: 'copy'
 
     input: 
         tuple val(sample_id), val(bam_file)
@@ -184,7 +178,7 @@ process CALL_CNVS_CASE {
         return base * Math.pow(2, task.attempt - 1)
     }
 
-    publishDir "${params.outdir}/cnvs", mode: 'copy'
+    publishDir "${outdir_gatk}/cnvs", mode: 'copy'
 
     input:
         tuple val(sample_id), val(bam_file), val (interval_id)
@@ -216,7 +210,7 @@ process CALL_CNVS_CASE {
 process POSTPROCESS_CNVS {
 
     tag "Postprocess CNVs for sample ${sample_id}"
-    publishDir "${params.outdir}", mode: 'copy'
+    publishDir "${outdir_gatk}", mode: 'copy'
 
     input:
         tuple val(sample_id), val(bam_file)
@@ -263,7 +257,7 @@ process POSTPROCESS_CNVS {
 process JOINT_CNVS_SEGMENTATION {
 
     tag "Joint CNV segmentation for sample ${sample_id}"
-    publishDir "${params.outdir}", mode: 'copy'
+    publishDir "${outdir_gatk}", mode: 'copy'
 
     input: 
         tuple val(sample_id), val(bam_file)

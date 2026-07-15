@@ -30,7 +30,6 @@ workflow {
     // B: GATK_GCNV
     outdir_gatk = "${params.outdir}/gatk_gcnv"
     bams_channel = Channel.of(tuple(params.sample_id, file(params.bam_file)))
-    genome_outdir = file("${outdir_gatk}/genome")
     scatter_count = params.scatter_count as int
     interval_ids = Channel
         .from(1..scatter_count)
@@ -44,11 +43,6 @@ workflow {
         bams_channel,
         outdir_gatk,
         params.reference,
-        genome_outdir,
-        params.seqtk,         
-        params.genome_chrs, 
-        params.mappability_bed,
-        params.segmental_duplication_bed, 
         scatter_count,
         sample_id_intervals_ch, 
         params.model_ploidy_outdir,
@@ -92,26 +86,19 @@ workflow CNMOPS {
         PREPARE_SAMPLE_LIST(
             sample_id,
             bam_file,
-            outdir,
             bams_list
         )
 
         // Step 2: Run cn.mops analysis
         RUN_CNMOPS(
             PREPARE_SAMPLE_LIST.out.bams_txt,
-            //cnmops_sif,
-            //run_cnmops_r,
-            sample_id,
-            outdir
+            sample_id
         )
 
         // Step 3: Convert results to VCF format
         CNMOPS_TO_VCF(
-            //cnmops_sif,
-            //cnmops_to_vcf_r,
             sample_id,
-            RUN_CNMOPS.out.sample_cnvs,
-            outdir
+            RUN_CNMOPS.out.sample_cnvs
         )
 
 
@@ -136,12 +123,7 @@ workflow GATK_GCNV {
     take:
         bams_channel // channel of [sample_id, bam_file] tuples
         outdir            
-        gr37_fasta_in            
-        genome_outdir            
-        seqtk                    
-        genome_chrs              
-        mappability_bed          
-        segmental_duplication_bed 
+        gr37_fasta_in 
         scatter_count
         sample_id_intervals_ch            
         model_ploidy_outdir
@@ -154,12 +136,7 @@ workflow GATK_GCNV {
 
         // Step 1: Preprocess genome fasta
         PREPROCESS_GENOME_FASTA(
-            gr37_fasta_in,
-            genome_outdir,
-            seqtk,
-            genome_chrs, 
-            mappability_bed,
-            segmental_duplication_bed
+            gr37_fasta_in
         )
 
         // Step 2: Collect read counts from samples
@@ -176,7 +153,6 @@ workflow GATK_GCNV {
         COLLECT_READ_COUNTS.out.sample_read_counts.collect().set { read_count_list }
         FILTER_GENOME(
             read_count_list,
-            genome_outdir,
             PREPROCESS_GENOME_FASTA.out.annotated_interval_list,
             PREPROCESS_GENOME_FASTA.out.interval_list
         )
