@@ -1,7 +1,7 @@
 
 process PREPROCESS_GENOME_FASTA {
 
-    publishDir "${outdir_gatk}/genome", mode: 'copy'
+    publishDir "${params.outdir}/gatk_gcnv/genome", mode: 'copy'
 
     input:
         val gr37_fasta_in
@@ -45,11 +45,10 @@ process PREPROCESS_GENOME_FASTA {
 process COLLECT_READ_COUNTS {
 
     tag "Collect read counts from ${sample_id}"
-    publishDir "${outdir_gatk}", mode: 'copy' 
+    publishDir "${params.outdir}/gatk_gcnv", mode: 'copy' 
 
     input:
         tuple val(sample_id), val(bam_file)
-        val outdir
         path interval_list
         path ref_fasta
         path fasta_index
@@ -76,7 +75,7 @@ process COLLECT_READ_COUNTS {
 process FILTER_GENOME {
 
     tag "Filter genome intervals"
-    publishDir "${outdir_gatk}/genome", mode: 'copy'
+    publishDir "${params.outdir}/gatk_gcnv/genome", mode: 'copy'
 
     input:
         path(read_count_files)
@@ -106,7 +105,7 @@ process FILTER_GENOME {
 process SCATTER_GENOME {
 
     tag "Scatter genome intervals into ${scatter_count} shards"
-    publishDir "${outdir_gatk}/scatter", mode: 'copy'
+    publishDir "${params.outdir}/gatk_gcnv/scatter", mode: 'copy'
 
     input:
         val scatter_count
@@ -143,7 +142,7 @@ process DETERMINE_PLOIDY_CASE {
         return base * Math.pow(2, task.attempt - 1)
     }
 
-    publishDir "${outdir_gatk}", mode: 'copy'
+    publishDir "${params.outdir}/gatk_gcnv", mode: 'copy'
 
     input: 
         tuple val(sample_id), val(bam_file)
@@ -178,7 +177,7 @@ process CALL_CNVS_CASE {
         return base * Math.pow(2, task.attempt - 1)
     }
 
-    publishDir "${outdir_gatk}/cnvs", mode: 'copy'
+    publishDir "${params.outdir}/gatk_gcnv/cnvs", mode: 'copy'
 
     input:
         tuple val(sample_id), val(bam_file), val (interval_id)
@@ -210,7 +209,7 @@ process CALL_CNVS_CASE {
 process POSTPROCESS_CNVS {
 
     tag "Postprocess CNVs for sample ${sample_id}"
-    publishDir "${outdir_gatk}", mode: 'copy'
+    publishDir "${params.outdir}/gatk_gcnv", mode: 'copy'
 
     input:
         tuple val(sample_id), val(bam_file)
