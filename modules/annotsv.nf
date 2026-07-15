@@ -23,9 +23,9 @@ process ANNOTSV {
     #    -bedtools ${params.bedtools}
 
     # Run AnnotSV annotation
-    ${annotsv_bin} \\
-        --annotsv ${annotsv_dir} \\
-        --bedtools ${bedtools_bin} \\
+    ${params.annotsv_bin} \\
+        --annotsv ${params.annotsv_dir} \\
+        --bedtools ${params.bedtools} \\
         --outdir \${PWD} \\
         --slop 1000 \\
         --size_filter 40 \\
