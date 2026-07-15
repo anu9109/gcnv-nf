@@ -12,22 +12,25 @@ include { DETERMINE_PLOIDY_CASE } from './modules/gatk.nf'
 include { CALL_CNVS_CASE } from './modules/gatk.nf'
 include { POSTPROCESS_CNVS } from './modules/gatk.nf'
 include { JOINT_CNVS_SEGMENTATION } from './modules/gatk.nf'
+include { SURVIVOR_MERGE } from './modules/survivor.nf'
+include { ANNOTSV } from './modules/annotsv.nf'
 
 
 workflow {
     
-    /*
+    // A: CNMOPS
+    outdir_cnmops = "${params.outdir}/cnmops"
     CNMOPS(
         params.sample_id, 
         file(params.bam_file),
         file(params.bams_list),
-        params.outdir
+        outdir_cnmops
     )
-    */
     
-    // create bams_channel of [sample_id, bam_file]
+    // B: GATK_GCNV
+    outdir_gatk = "${params.outdir}/gatk_gcnv"
     bams_channel = Channel.of(tuple(params.sample_id, file(params.bam_file)))
-    genome_outdir = file("${params.outdir}/genome")
+    genome_outdir = file("${outdir_gatk}/genome")
     scatter_count = params.scatter_count as int
     interval_ids = Channel
         .from(1..scatter_count)
@@ -36,10 +39,10 @@ workflow {
         .combine(interval_ids)
         .map { row -> tuple(row[0], row[1], row[2]) }
         .set { sample_id_intervals_ch }
-    pedigree = file("${params.outdir}/pedigree.txt")
+    pedigree = file("${outdir_gatk}/pedigree.txt")
     GATK_GCNV(
         bams_channel,
-        params.outdir,
+        outdir_gatk,
         params.reference,
         genome_outdir,
         params.seqtk,         
@@ -53,6 +56,19 @@ workflow {
         interval_ids,
         pedigree
     )
+
+    // C: SURVIVOR
+    SURVIVOR_MERGE(
+        params.sample_id,
+        CNMOPS.out.vcf,
+        GATK_GCNV.out.genotyped_segments_vcf
+    )
+
+    // D: AnnotSV
+    ANNOTSV(
+        params.sample_id,
+        SURVIVOR_MERGE.out.merged_vcf
+    )
 }
 
 
@@ -62,17 +78,14 @@ workflow {
 // This subworkflow performs CNV detection using the cn.mops algorithm.
 // It processes individual samples by normalizing against a cohort of control samples.
 workflow CNMOPS {
+
+
     take:
-        sample_id      // val: sample identifier
-        bam_file       // val: path to sample BAM file
+        sample_id
+        bam_file 
         bams_list      // val: path to file with list of all BAM files
-        outdir         // val: output directory path
-        //cnmops_sif     // val: path to cnmops singularity container
-        //run_cnmops_r   // val: path to run_cnmops.R script
-        //cnmops_to_vcf_r // val: path to cnmops_to_vcf_per_sample.R script
-        //annotsv_bin    // val: path to annotsv binary
-        //annotsv_dir    // val: path to annotsv directory
-        //bedtools_bin   // val: path to bedtools binary
+        outdir
+
 
     main:
         // Step 1: Prepare sample list with controls
@@ -101,6 +114,7 @@ workflow CNMOPS {
             outdir
         )
 
+
     emit:
         segmentation = RUN_CNMOPS.out.sample_seg
         cnvs = RUN_CNMOPS.out.sample_cnvs
@@ -116,42 +130,25 @@ workflow CNMOPS {
 // This subworkflow performs germline CNV detection using GATK's gCNV caller.
 // It includes genome preprocessing, read count collection, ploidy determination,
 // CNV calling, postprocessing, and joint cohort segmentation.
-
-/*
-include { COLLECT_READ_COUNTS } from './modules/gatk.nf'
-include { FILTER_GENOME } from './modules/gatk.nf'
-include { SCATTER_GENOME } from './modules/gatk.nf'
-include { DETERMINE_PLOIDY } from './modules/gatk.nf'
-include { CALL_CNVS } from './modules/gatk.nf'
-include { POSTPROCESS_CNVS } from './modules/gatk.nf'
-include { JOINT_CNVS_SEGMENTATION } from './modules/gatk.nf'
-*/
-
 workflow GATK_GCNV {
+
+
     take:
-        bams_channel             // channel of [sample_id, bam_file] tuples
-        outdir            // val: output directory for samples
-        gr37_fasta_in            // val: path to reference genome fasta
-        genome_outdir            // val: output directory for genome
-        seqtk                    // val: path to seqtk
-        genome_chrs              // val: path to genome chromosomes file
-        mappability_bed          // val: path to mappability BED
-        segmental_duplication_bed // val: path to segmental duplication BED
+        bams_channel // channel of [sample_id, bam_file] tuples
+        outdir            
+        gr37_fasta_in            
+        genome_outdir            
+        seqtk                    
+        genome_chrs              
+        mappability_bed          
+        segmental_duplication_bed 
         scatter_count
         sample_id_intervals_ch            
         model_ploidy_outdir
         model_cnvs_outdir
         interval_ids
         pedigree
-        //model_outdir             // val: output directory for models
-        //model_prefix             // val: prefix for model output files
-        //cnvs_prefix              // val: prefix for CNV output files
-        //cnvs_outdir              // val: output directory for CNV calls
-        //scatter_outdir           // val: output directory for scattered intervals
-        //outdir                   // val: final output directory
-        //gatk_sif                 // val: path to gatk singularity container
-        //hg19_ploidy_priors       // val: path to ploidy priors file
-        //pedigree                 // val: path to pedigree file
+
 
     main:
 
@@ -221,7 +218,8 @@ workflow GATK_GCNV {
         // Step 8: Joint cohort segmentation
         JOINT_CNVS_SEGMENTATION(
             bams_channel,
-            POSTPROCESS_CNVS.out.genotyped_segments.first(),
+            POSTPROCESS_CNVS.out.genotyped_segments_vcf.first(),
+            POSTPROCESS_CNVS.out.genotyped_segments_vcf_index.first(),
             PREPROCESS_GENOME_FASTA.out.ref_fasta,
             PREPROCESS_GENOME_FASTA.out.fasta_index,
             PREPROCESS_GENOME_FASTA.out.dict,
@@ -233,24 +231,14 @@ workflow GATK_GCNV {
     emit:
         genome_fasta = PREPROCESS_GENOME_FASTA.out.ref_fasta
         read_counts = COLLECT_READ_COUNTS.out.sample_read_counts
-        //ploidy_calls = DETERMINE_PLOIDY.out.ploidy_calls
-        //cnv_calls = CALL_CNVS.out.cnv_calls
-        //cnv_models = CALL_CNVS.out.cnv_model
-        //genotyped_vcfs = POSTPROCESS_CNVS.out.genotyped_intervals
-        //denoised_copy_ratios = POSTPROCESS_CNVS.out.denoised_copy_ratios
+        genotyped_segments_vcf = POSTPROCESS_CNVS.out.genotyped_segments_vcf
+        genotyped_intervals_vcf = POSTPROCESS_CNVS.out.genotyped_intervals
+        denoised_copy_ratios = POSTPROCESS_CNVS.out.denoised_copy_ratios
 }
 
 
 
-/*
-workflow.onComplete = {
-    log.info(
-        workflow.success
-            ? "\nDone!\n cn.mops ran successfully. See results in: ${params.outdir}\n"
-            : "\nOops .. something went wrong\n"
-    )
-}
-*/
+
 
 
 

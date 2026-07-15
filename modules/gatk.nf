@@ -228,8 +228,9 @@ process POSTPROCESS_CNVS {
         val scatter_count
 
     output:
-        path "${sample_id}_genotyped-intervals.vcf.gz", emit: genotyped_intervals
-        path "${sample_id}_genotyped-segments.vcf.gz", emit: genotyped_segments
+        path "${sample_id}_genotyped-intervals.vcf.gz", emit: genotyped_intervals_vcf
+        path "${sample_id}_genotyped-segments.vcf.gz", emit: genotyped_segments_vcf
+        path "${sample_id}_genotyped-segments.vcf.gz.tbi", emit: genotyped_segments_vcf_index
         path "${sample_id}_denoised_copy_ratios.tsv", emit: denoised_copy_ratios
 
     script:
@@ -265,7 +266,8 @@ process JOINT_CNVS_SEGMENTATION {
 
     input: 
         tuple val(sample_id), val(bam_file)
-        path segment_vcf
+        path genotyped_segments_vcf
+        path genotyped_segments_vcf_index
         path ref_fasta
         path fasta_index
         path dict
@@ -283,7 +285,7 @@ process JOINT_CNVS_SEGMENTATION {
 
     gatk JointGermlineCNVSegmentation \\
         -R ${ref_fasta} \\
-        -V ${segment_vcf} \\
+        -V ${genotyped_segments_vcf} \\
         --model-call-intervals ${filtered_interval_list} \\
         --pedigree ${pedigree} \\
         --create-output-variant-index \\

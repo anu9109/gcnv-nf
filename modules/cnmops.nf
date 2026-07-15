@@ -29,8 +29,6 @@ process RUN_CNMOPS {
 
     input:
         path bams_txt
-        //val cnmops_sif
-        //val run_cnmops_r
         val sample_id
         val outdir
 
@@ -51,8 +49,6 @@ process CNMOPS_TO_VCF {
     publishDir "${params.outdir}", mode: 'copy'
     
     input:
-        //val cnmops_sif
-        //val cnmops_to_vcf_r
         val sample_id
         path sample_cnvs
         val outdir
