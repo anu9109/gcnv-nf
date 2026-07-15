@@ -234,7 +234,7 @@ workflow GATK_GCNV {
         genome_fasta = PREPROCESS_GENOME_FASTA.out.ref_fasta
         read_counts = COLLECT_READ_COUNTS.out.sample_read_counts
         genotyped_segments_vcf = POSTPROCESS_CNVS.out.genotyped_segments_vcf
-        genotyped_intervals_vcf = POSTPROCESS_CNVS.out.genotyped_intervals
+        genotyped_intervals_vcf = POSTPROCESS_CNVS.out.genotyped_intervals_vcf
         denoised_copy_ratios = POSTPROCESS_CNVS.out.denoised_copy_ratios
 }
 
