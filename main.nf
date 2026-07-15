@@ -19,16 +19,13 @@ include { ANNOTSV } from './modules/annotsv.nf'
 workflow {
     
     // A: CNMOPS
-    outdir_cnmops = "${params.outdir}/cnmops"
     CNMOPS(
         params.sample_id, 
         file(params.bam_file),
-        file(params.bams_list),
-        outdir_cnmops
+        file(params.bams_list)
     )
     
     // B: GATK_GCNV
-    outdir_gatk = "${params.outdir}/gatk_gcnv"
     bams_channel = Channel.of(tuple(params.sample_id, file(params.bam_file)))
     scatter_count = params.scatter_count as int
     interval_ids = Channel
@@ -38,10 +35,9 @@ workflow {
         .combine(interval_ids)
         .map { row -> tuple(row[0], row[1], row[2]) }
         .set { sample_id_intervals_ch }
-    pedigree = file("${outdir_gatk}/pedigree.txt")
+    pedigree = file("${params.outdir}/gatk_gcnv/pedigree.txt")
     GATK_GCNV(
         bams_channel,
-        outdir_gatk,
         params.reference,
         scatter_count,
         sample_id_intervals_ch, 
@@ -78,7 +74,6 @@ workflow CNMOPS {
         sample_id
         bam_file 
         bams_list      // val: path to file with list of all BAM files
-        outdir
 
 
     main:
@@ -121,8 +116,7 @@ workflow GATK_GCNV {
 
 
     take:
-        bams_channel // channel of [sample_id, bam_file] tuples
-        outdir            
+        bams_channel // channel of [sample_id, bam_file] tuples        
         gr37_fasta_in 
         scatter_count
         sample_id_intervals_ch            
@@ -142,7 +136,6 @@ workflow GATK_GCNV {
         // Step 2: Collect read counts from samples
         COLLECT_READ_COUNTS(
             bams_channel,
-            outdir,
             PREPROCESS_GENOME_FASTA.out.interval_list,
             PREPROCESS_GENOME_FASTA.out.ref_fasta,
             PREPROCESS_GENOME_FASTA.out.fasta_index,

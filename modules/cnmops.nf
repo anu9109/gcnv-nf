@@ -1,6 +1,6 @@
 process PREPARE_SAMPLE_LIST {
 
-    publishDir "${outdir_cnmops}", mode: 'copy'
+    publishDir "${params.outdir}/cnmops", mode: 'copy'
 
     input:
         val sample_id
@@ -13,7 +13,7 @@ process PREPARE_SAMPLE_LIST {
     script:
     """
     echo "1. Creating output directory if it does not exist"
-    mkdir -p ${outdir_cnmops}
+    mkdir -p ${params.outdir}/cnmops
 
     echo "2. Gathering samples to normalize sample of interest against"
     shuf -n 19 ${bams_list} > bams.txt
@@ -24,7 +24,7 @@ process PREPARE_SAMPLE_LIST {
 process RUN_CNMOPS {
 
     tag "cn.mops on ${sample_id}"
-    publishDir "${outdir_cnmops}", mode: 'copy'
+    publishDir "${params.outdir}/cnmops", mode: 'copy'
 
     input:
         path bams_txt
@@ -44,7 +44,7 @@ process RUN_CNMOPS {
 
 process CNMOPS_TO_VCF {
 
-    publishDir "${outdir_cnmops}", mode: 'copy'
+    publishDir "${params.outdir}/cnmops", mode: 'copy'
     
     input:
         val sample_id
