@@ -11,7 +11,7 @@ include { SCATTER_GENOME } from './modules/gatk.nf'
 include { DETERMINE_PLOIDY_CASE } from './modules/gatk.nf'
 include { CALL_CNVS_CASE } from './modules/gatk.nf'
 include { POSTPROCESS_CNVS } from './modules/gatk.nf'
-include { JOINT_CNVS_SEGMENTATION } from './modules/gatk.nf'
+//include { JOINT_CNVS_SEGMENTATION } from './modules/gatk.nf'
 include { SURVIVOR_MERGE } from './modules/survivor.nf'
 include { ANNOTSV } from './modules/annotsv.nf'
 
@@ -215,6 +215,7 @@ workflow GATK_GCNV {
             scatter_count
         )  
 
+        /*
         // Step 8: Joint cohort segmentation
         JOINT_CNVS_SEGMENTATION(
             bams_channel,
@@ -226,6 +227,7 @@ workflow GATK_GCNV {
             FILTER_GENOME.out.filtered_interval_list,
             pedigree
         )
+        */
     
 
     emit:

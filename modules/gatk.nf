@@ -259,6 +259,7 @@ process POSTPROCESS_CNVS {
     """
 }
 
+/*
 process JOINT_CNVS_SEGMENTATION {
 
     tag "Joint CNV segmentation for sample ${sample_id}"
@@ -292,3 +293,4 @@ process JOINT_CNVS_SEGMENTATION {
         -O ${sample_id}_clustered.vcf.gz
     """
 }
+*/
