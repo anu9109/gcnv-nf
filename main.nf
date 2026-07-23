@@ -14,6 +14,8 @@ include { POSTPROCESS_CNVS } from './modules/gatk.nf'
 //include { JOINT_CNVS_SEGMENTATION } from './modules/gatk.nf'
 include { SURVIVOR_MERGE } from './modules/survivor.nf'
 include { ANNOTSV } from './modules/annotsv.nf'
+include { FILTER_PRIORITY_EVENTS } from './modules/priority_viz.nf'
+include { PLOT_EVENT_COVERAGE } from './modules/priority_viz.nf'
 
 
 workflow {
@@ -58,6 +60,19 @@ workflow {
     ANNOTSV(
         params.sample_id,
         SURVIVOR_MERGE.out.merged_vcf
+    )
+
+    // E: Filter AnnotSV results for pathogenic/likely pathogenic events and for events supported by more than one caller
+    FILTER_PRIORITY_EVENTS(
+        params.sample_id,
+        ANNOTSV.out.annotated_tsv
+    )
+
+    // F: Plot read-depth coverage for each priority event
+    PLOT_EVENT_COVERAGE(
+        params.sample_id,
+        file(params.depth_file),
+        FILTER_PRIORITY_EVENTS.out.priority_tsv
     )
 }
 
