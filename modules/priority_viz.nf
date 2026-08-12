@@ -12,16 +12,7 @@ process FILTER_PRIORITY_EVENTS {
 
     script:
     """
-    awk -F'\\t' '
-        NR == 1 { print; next }
-        {
-            annotsv_type = \$16
-
-            if (annotsv_type == "full" && tolower(\$53) ~ /pathogenic/) {
-                print
-            }
-        }
-    ' ${annotated_tsv} > ${sample_id}.cnvs.merged.annot.priority.tsv
+    awk -F'\\t' '{if ($16 == "full" && tolower($53) ~ /pathogenic/) {print}}' ${annotated_tsv} > ${sample_id}.cnvs.merged.annot.priority.tsv
     """
 }
 
