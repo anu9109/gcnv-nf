@@ -7,7 +7,10 @@ library(tidyverse)
 plot_genome_cov <- function(depth_file, plot_chr, plot_start, plot_end, plot_label, locus_label, plot_savepath) {
   
   # read depth data
-  depth_data = fread(depth_file, header = FALSE)
+  depth_data <- read.table(gzfile(depth_file), header = FALSE, sep = "\t")
+  setDT(depth_data)
+
+  # depth_data = fread(depth_file, header = FALSE)
   setnames(depth_data, c("chromosome", "start", "stop", "depth"))
   
   # filter to chr of interest
@@ -34,7 +37,7 @@ plot_genome_cov <- function(depth_file, plot_chr, plot_start, plot_end, plot_lab
       limits = c(plot_start - 2*plot_pad, plot_end + 2*plot_pad),
       labels = scales::label_comma()  # avoids scientific notation
     ) + 
-    scale_y_continuous(limits = c(-5, max(avg_depth$mean_depth, 110)+5)) + 
+    scale_y_continuous(limits = c(-5, max(avg_depth$mean_depth, 150)+5)) + 
     theme_minimal()
   
   # save plot to file
@@ -71,9 +74,11 @@ for (i in seq_len(nrow(tsv))) {
     ranking_label = ifelse(!is.na(ranking_labels[as.character(ranking)]),
                            ranking_labels[as.character(ranking)], "Unknown")
 
-    plot_label    = sprintf("%s | %s:%d_%d %s | SUPPORTED BY %d CALLERS | RANKING: %s",
+    plot_label    = sprintf("%s | %s:%d_%d %s | SUPPORTED BY %d CALLER(S) | RANKING: %s",
                             sample_id, chr, start, end, sv_type, supp, ranking_label)
     plot_savepath = sprintf("%s_%s_%d_%d_%s.pdf", sample_id, chr, start, end, sv_type)
+
+    message(sprintf("Plotting event %d/%d: %s:%d-%d %s (ranking: %s, SUPP: %d)", i, nrow(tsv), chr, start, end, sv_type, ranking_label, supp))
 
     plot_genome_cov(
         depth_file    = depth_file,

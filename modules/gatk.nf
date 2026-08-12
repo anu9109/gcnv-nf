@@ -252,6 +252,32 @@ process POSTPROCESS_CNVS {
     """
 }
 
+
+process FILTER_GATK {
+
+    tag "Filter diploid segments for ${sample_id}"
+    publishDir "${params.outdir}/gatk_gcnv", mode: 'copy'
+
+    input:
+        val  sample_id
+        path genotyped_segments_vcf
+        path genotyped_segments_vcf_index
+
+    output:
+        path "${sample_id}_genotyped-segments-filtered.vcf.gz",     emit: genotyped_segments_filtered_vcf
+        path "${sample_id}_genotyped-segments-filtered.vcf.gz.tbi", emit: genotyped_segments_filtered_vcf_index
+
+    script:
+    """
+    bcftools view \\
+        -e 'ALT="."' \\
+        ${genotyped_segments_vcf} \\
+        -Oz -o ${sample_id}_genotyped-segments-filtered.vcf.gz
+    bcftools index -t ${sample_id}_genotyped-segments-filtered.vcf.gz
+    """
+}
+
+
 /*
 process JOINT_CNVS_SEGMENTATION {
 

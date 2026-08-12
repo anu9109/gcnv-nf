@@ -15,17 +15,9 @@ process FILTER_PRIORITY_EVENTS {
     awk -F'\\t' '
         NR == 1 { print; next }
         {
-            annotsv_type = \$18
-            info         = \$12
-            ranking      = \$72 + 0
+            annotsv_type = \$16
 
-            # Extract SUPP value from INFO field (e.g. SUPP=2)
-            supp = 0
-            if (match(info, /SUPP=([0-9]+)/, arr)) {
-                supp = arr[1] + 0
-            }
-
-            if (annotsv_type == "full" && (ranking >= 4 || supp > 1)) {
+            if (annotsv_type == "full" && tolower(\$53) ~ /pathogenic/) {
                 print
             }
         }

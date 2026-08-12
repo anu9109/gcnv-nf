@@ -11,49 +11,100 @@ include { SCATTER_GENOME } from './modules/gatk.nf'
 include { DETERMINE_PLOIDY_CASE } from './modules/gatk.nf'
 include { CALL_CNVS_CASE } from './modules/gatk.nf'
 include { POSTPROCESS_CNVS } from './modules/gatk.nf'
+include { FILTER_GATK } from './modules/gatk.nf'
 //include { JOINT_CNVS_SEGMENTATION } from './modules/gatk.nf'
 include { SURVIVOR_MERGE } from './modules/survivor.nf'
 include { ANNOTSV } from './modules/annotsv.nf'
 include { FILTER_PRIORITY_EVENTS } from './modules/priority_viz.nf'
 include { PLOT_EVENT_COVERAGE } from './modules/priority_viz.nf'
+include { GENERATE_REPORT } from './modules/report.nf'
 
 
 workflow {
+    if (params.get('rerun_viz', false)) {
+        RERUN_VIZ()
+    } else {
     
-    // A: CNMOPS
-    CNMOPS(
-        params.sample_id, 
-        file(params.bam_file),
-        file(params.bams_list)
-    )
-    
-    // B: GATK_GCNV
-    bams_channel = Channel.of(tuple(params.sample_id, file(params.bam_file)))
-    scatter_count = params.scatter_count as int
-    interval_ids = Channel
-        .from(1..scatter_count)
-        .map { String.format("%04d", it) }
-    bams_channel
-        .combine(interval_ids)
-        .map { row -> tuple(row[0], row[1], row[2]) }
-        .set { sample_id_intervals_ch }
-    pedigree = file("${params.outdir}/gatk_gcnv/pedigree.txt")
-    GATK_GCNV(
-        bams_channel,
-        params.reference,
-        scatter_count,
-        sample_id_intervals_ch, 
-        params.model_ploidy_outdir,
-        params.model_cnvs_outdir,
-        interval_ids,
-        pedigree
-    )
+        // A: CNMOPS
+        CNMOPS(
+            params.sample_id, 
+            file(params.bam_file),
+            file(params.bams_list)
+        )
+        
+        // B: GATK_GCNV
+        bams_channel = Channel.of(tuple(params.sample_id, file(params.bam_file)))
+        scatter_count = params.scatter_count as int
+        interval_ids = Channel
+            .from(1..scatter_count)
+            .map { String.format("%04d", it) }
+        bams_channel
+            .combine(interval_ids)
+            .map { row -> tuple(row[0], row[1], row[2]) }
+            .set { sample_id_intervals_ch }
+        pedigree = file("${params.outdir}/gatk_gcnv/pedigree.txt")
+        GATK_GCNV(
+            bams_channel,
+            params.reference,
+            scatter_count,
+            sample_id_intervals_ch, 
+            params.model_ploidy_outdir,
+            params.model_cnvs_outdir,
+            interval_ids,
+            pedigree
+        )
+
+        // C: SURVIVOR
+        SURVIVOR_MERGE(
+            params.sample_id,
+            CNMOPS.out.vcf,
+            GATK_GCNV.out.genotyped_segments_filtered_vcf
+        )
+
+        // D: AnnotSV
+        ANNOTSV(
+            params.sample_id,
+            SURVIVOR_MERGE.out.merged_vcf
+        )
+
+        // E: Filter AnnotSV results for pathogenic/likely pathogenic events and for events supported by more than one caller
+        FILTER_PRIORITY_EVENTS(
+            params.sample_id,
+            ANNOTSV.out.annotated_tsv
+        )
+
+        // F: Plot read-depth coverage for each priority event
+        PLOT_EVENT_COVERAGE(
+            params.sample_id,
+            file(params.depth_file),
+            FILTER_PRIORITY_EVENTS.out.priority_tsv
+        )
+
+        // G: Generate HTML report
+        GENERATE_REPORT(
+            params.sample_id,
+            CNMOPS.out.vcf,
+            GATK_GCNV.out.genotyped_segments_filtered_vcf,
+            SURVIVOR_MERGE.out.merged_vcf,
+            ANNOTSV.out.annotated_tsv,
+            FILTER_PRIORITY_EVENTS.out.priority_tsv,
+            PLOT_EVENT_COVERAGE.out.coverage_plots.collect()
+        )
+    }
+}
+
+workflow RERUN_VIZ {
+
+    // Point these at your existing output files
+    depth_file = file(params.depth_file)
+    cnmops_vcf = file("${params.outdir}/cnmops/${params.sample_id}.vcf")
+    gatk_vcf   = file("${params.outdir}/gatk_gcnv/${params.sample_id}_genotyped-segments-filtered.vcf.gz")
 
     // C: SURVIVOR
     SURVIVOR_MERGE(
         params.sample_id,
-        CNMOPS.out.vcf,
-        GATK_GCNV.out.genotyped_segments_vcf
+        cnmops_vcf,
+        gatk_vcf
     )
 
     // D: AnnotSV
@@ -62,17 +113,28 @@ workflow {
         SURVIVOR_MERGE.out.merged_vcf
     )
 
-    // E: Filter AnnotSV results for pathogenic/likely pathogenic events and for events supported by more than one caller
+    // E: Filter priority events
     FILTER_PRIORITY_EVENTS(
         params.sample_id,
         ANNOTSV.out.annotated_tsv
     )
 
-    // F: Plot read-depth coverage for each priority event
+    // F: Plot coverage
     PLOT_EVENT_COVERAGE(
         params.sample_id,
-        file(params.depth_file),
+        depth_file,
         FILTER_PRIORITY_EVENTS.out.priority_tsv
+    )
+
+    // G: Generate HTML report
+    GENERATE_REPORT(
+        params.sample_id,
+        cnmops_vcf,
+        gatk_vcf,
+        SURVIVOR_MERGE.out.merged_vcf,
+        ANNOTSV.out.annotated_tsv,
+        FILTER_PRIORITY_EVENTS.out.priority_tsv,
+        PLOT_EVENT_COVERAGE.out.coverage_plots.collect()
     )
 }
 
@@ -199,6 +261,13 @@ workflow GATK_GCNV {
             scatter_count
         )  
 
+        // Step 8: Filter out diploid (ALT=.) segments
+        FILTER_GATK(
+            bams_channel.map { sample_id, bam -> sample_id },
+            POSTPROCESS_CNVS.out.genotyped_segments_vcf,
+            POSTPROCESS_CNVS.out.genotyped_segments_vcf_index
+        )
+
         /*
         // Step 8: Joint cohort segmentation
         JOINT_CNVS_SEGMENTATION(
@@ -220,6 +289,7 @@ workflow GATK_GCNV {
         genotyped_segments_vcf = POSTPROCESS_CNVS.out.genotyped_segments_vcf
         genotyped_intervals_vcf = POSTPROCESS_CNVS.out.genotyped_intervals_vcf
         denoised_copy_ratios = POSTPROCESS_CNVS.out.denoised_copy_ratios
+        genotyped_segments_filtered_vcf = FILTER_GATK.out.genotyped_segments_filtered_vcf
 }
 
 
