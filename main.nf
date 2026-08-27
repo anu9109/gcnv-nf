@@ -77,7 +77,9 @@ workflow {
         PLOT_EVENT_COVERAGE(
             params.sample_id,
             file(params.depth_file),
-            FILTER_PRIORITY_EVENTS.out.priority_tsv
+            FILTER_PRIORITY_EVENTS.out.priority_tsv,
+            file(params.gc_file),
+            file(params.map_file)
         )
 
         // G: Generate HTML report
@@ -123,7 +125,9 @@ workflow RERUN_VIZ {
     PLOT_EVENT_COVERAGE(
         params.sample_id,
         depth_file,
-        FILTER_PRIORITY_EVENTS.out.priority_tsv
+        FILTER_PRIORITY_EVENTS.out.priority_tsv,
+        file(params.gc_file),
+        file(params.map_file)
     )
 
     // G: Generate HTML report

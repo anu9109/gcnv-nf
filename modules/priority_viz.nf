@@ -12,7 +12,12 @@ process FILTER_PRIORITY_EVENTS {
 
     script:
     """
-    awk -F'\\t' '{if ($16 == "full" && tolower($53) ~ /pathogenic/) {print}}' ${annotated_tsv} > ${sample_id}.cnvs.merged.annot.priority.tsv
+    cat > filter.awk << 'AWKEOF'
+    BEGIN { FS = "\t"; OFS = "\t" }
+    NR == 1                                                    { print; next }
+    \$16 == "full" && tolower(\$53) ~ /pathogenic/ { print }
+    AWKEOF
+    awk -f filter.awk ${annotated_tsv} > ${sample_id}.cnvs.merged.annot.priority.tsv
     """
 }
 
@@ -26,12 +31,14 @@ process PLOT_EVENT_COVERAGE {
         val sample_id
         path depth_file
         path priority_tsv
+        path gc_file
+        path map_file
 
     output:
         path "*.pdf", emit: coverage_plots
 
     script:
     """
-    plot_event_coverage.R ${sample_id} ${depth_file} ${priority_tsv}
+    plot_event_coverage.R ${sample_id} ${depth_file} ${priority_tsv} ${gc_file} ${map_file}
     """
 }
