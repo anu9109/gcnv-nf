@@ -107,10 +107,10 @@ plot_chromosome_ideogram = function(plot_chr, plot_start, plot_end, plot_label, 
               fill = "firebrick2", alpha = 0.8, color = "darkred", linewidth = 0.2) +
     geom_vline(xintercept = event_start, color = "darkred", linetype = "dashed", linewidth = 0.3) +
     geom_vline(xintercept = event_end, color = "darkred", linetype = "dashed", linewidth = 0.3) +
-    annotate("text", x = chr_len * 0.2, y = 0.6, label = "p-arm", size = 3.2, color = "grey20") +
-    annotate("text", x = chr_len * 0.8, y = 0.6, label = "q-arm", size = 3.2, color = "grey20") +
-    annotate("text", x = cen_mid, y = -0.6, label = "centromere", size = 3.0, color = "grey30") +
-    annotate("text", x = chr_len * 0.5, y = 0.82, label = paste0("Chr ", chr_key), size = 4) +
+    annotate("text", x = chr_len * 0.2, y = 0.6, label = "", size = 3.2, color = "grey20") +
+    annotate("text", x = chr_len * 0.8, y = 0.6, label = "", size = 3.2, color = "grey20") +
+    annotate("text", x = cen_mid, y = -0.6, label = "", size = 3.0, color = "grey30") +
+    annotate("text", x = chr_len * 0.5, y = 0.82, label = paste0("Chromosome ", chr_key), size = 4) +
     labs(
       title = paste0("Ideogram: ", plot_label),
       x = "Chromosome position (bp)",
