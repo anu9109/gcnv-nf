@@ -39,6 +39,6 @@ process PLOT_EVENT_COVERAGE {
 
     script:
     """
-    plot_event_coverage.R ${sample_id} ${depth_file} ${priority_tsv} ${gc_file} ${map_file} ${params.genome_build}
+    plot_event_coverage.R ${sample_id} ${depth_file} ${priority_tsv} ${gc_file} ${map_file} ${params.genome_build} ${projectDir}/data
     """
 }

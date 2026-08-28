@@ -51,16 +51,6 @@ normalize_chr = function(chr_label) {
   toupper(chr)
 }
 
-default_data_dir = function() {
-  cmd_args = commandArgs(trailingOnly = FALSE)
-  script_arg = cmd_args[grep("^--file=", cmd_args)]
-  if (length(script_arg) > 0) {
-    script_path = sub("^--file=", "", script_arg[1])
-    return(normalizePath(file.path(dirname(script_path), "..", "data"), mustWork = FALSE))
-  }
-  file.path(getwd(), "data")
-}
-
 plot_chromosome_ideogram = function(plot_chr, plot_start, plot_end, plot_label, locus_label, plot_savepath) {
   chr_key = normalize_chr(plot_chr)
   chr_len = CHR_LENGTHS[[chr_key]]
@@ -284,7 +274,7 @@ priority_tsv = args[3]
 gc_file      = args[4]
 map_file     = args[5]
 genome_build = ifelse(length(args) >= 6 && nzchar(args[6]), args[6], "GRCh37")
-data_dir = default_data_dir()
+data_dir     = args[7]
 
 genome_ref = load_genome_reference(genome_build, data_dir)
 CHR_LENGTHS = genome_ref$chr_lengths
