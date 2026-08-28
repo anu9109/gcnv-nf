@@ -4,6 +4,8 @@ work/
 .nextflow.log*
 results/
 outdir/
+pipeline_*.html
+pipeline_*.txt
 
 # Python
 __pycache__/

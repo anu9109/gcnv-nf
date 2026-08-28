@@ -35,10 +35,10 @@ process PLOT_EVENT_COVERAGE {
         path map_file
 
     output:
-        path "*.pdf", emit: coverage_plots
+        path "*.png", emit: coverage_plots
 
     script:
     """
-    plot_event_coverage.R ${sample_id} ${depth_file} ${priority_tsv} ${gc_file} ${map_file}
+    plot_event_coverage.R ${sample_id} ${depth_file} ${priority_tsv} ${gc_file} ${map_file} ${params.genome_build}
     """
 }

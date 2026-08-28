@@ -195,16 +195,87 @@ def make_size_dist_chart(svs):
             f'<div class="chart-legend">{legend}</div>')
 
 
-def embed_pdf_html(pdf_path):
-    with open(pdf_path, 'rb') as fh:
-        b64 = base64.b64encode(fh.read()).decode()
-    stem = Path(pdf_path).stem
+def parse_image_kind(path):
+    name = Path(path).name
+    if name.endswith('_ideogram.png'):
+        return 'ideogram'
+    if name.endswith('_normalized.png'):
+        return 'normalized'
+    return 'depth'
+
+
+def image_src_png(img_path):
+    """Return data URL for a PNG path, or the original path on read failure."""
+    path = resolve_image_path(img_path)
+    try:
+        with open(path, 'rb') as fh:
+            b64 = base64.b64encode(fh.read()).decode('ascii')
+        return f'data:image/png;base64,{b64}'
+    except OSError:
+        return img_path
+
+
+def resolve_image_path(img_path):
+    """Resolve image path as-is, then by basename in current working directory."""
+    p = Path(str(img_path))
+    if p.exists():
+        return str(p)
+    alt = Path(p.name)
+    if alt.exists():
+        return str(alt)
+    return str(p)
+
+
+def parse_event_image_name(img_path):
+    """Parse event PNG naming into sample/chrom/start/end/svtype/kind.
+
+    Supports names like:
+      sample_chr_start_end_svtype.png
+      sample_chr_start_end_svtype_ideogram.png
+      sample_chr_start_end_svtype_normalized.png
+    """
+    name = Path(img_path).name
+    if not name.lower().endswith('.png'):
+        return None
+
+    stem = name[:-4]
+    kind = 'depth'
+    if stem.endswith('_ideogram'):
+        stem = stem[:-len('_ideogram')]
+        kind = 'ideogram'
+    elif stem.endswith('_normalized'):
+        stem = stem[:-len('_normalized')]
+        kind = 'normalized'
+
+    m = re.match(r'^(?P<sample_chrom>.+)_(?P<start>\d+)_(?P<end>\d+)_(?P<svtype>.+)$', stem)
+    if not m:
+        return None
+
+    sample_chrom = m.group('sample_chrom')
+    if '_' not in sample_chrom:
+        return None
+    sample, chrom = sample_chrom.rsplit('_', 1)
+
+    return {
+        'sample': sample,
+        'chrom': chrom,
+        'start': m.group('start'),
+        'end': m.group('end'),
+        'svtype': m.group('svtype'),
+        'kind': kind,
+    }
+
+
+def embed_png_html(img_path, title=None):
+    stem = Path(img_path).stem
     anchor_id = f'plot-{stem}'
+    title_html = f'<p class="plot-title">{title or stem}</p>'
+    src = image_src_png(img_path)
     return (
         f'<div class="plot" id="{anchor_id}">'
-        f'<p class="plot-title">{stem}</p>'
-        f'<embed src="data:application/pdf;base64,{b64}" '
-        f'width="100%" height="520px" type="application/pdf"></div>'
+        f'{title_html}'
+        f'<img src="{src}" alt="{stem}" style="width:100%;max-width:760px;display:block;margin:0 auto;">'
+        f'</div>'
     )
 
 
@@ -252,6 +323,10 @@ CSS = """
   .plot{margin:20px 0;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden}
   .plot-title{background:#f7fafc;margin:0;padding:8px 14px;font-size:.85em;
               color:#4a5568;border-bottom:1px solid #e2e8f0}
+  .event-plot-block{margin:26px 0;padding:0 0 10px 0;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden}
+  .event-plot-block .event-header{background:#f7fafc;padding:10px 14px;border-bottom:1px solid #e2e8f0;font-weight:600;color:#2d3748}
+  .image-stack{display:flex;flex-direction:column;gap:16px;padding:18px 18px 8px}
+  .image-stack img{display:block;width:100%;max-width:760px;margin:0 auto;border:1px solid #e2e8f0;border-radius:8px;background:#fff}
   footer{margin-top:50px;font-size:.8em;color:#a0aec0;
          border-top:1px solid #e2e8f0;padding-top:12px}
 """
@@ -259,7 +334,7 @@ CSS = """
 
 # ── report builder ────────────────────────────────────────────────────────────
 
-def build_report(sample_id, cnmops_vcf, gatk_vcf, merged_vcf, annotated_tsv, priority_tsv, pdf_files):
+def build_report(sample_id, cnmops_vcf, gatk_vcf, merged_vcf, annotated_tsv, priority_tsv, image_files):
 
     n_cnmops = count_vcf_calls(cnmops_vcf)
     n_gatk   = count_vcf_calls(gatk_vcf)
@@ -341,8 +416,8 @@ def build_report(sample_id, cnmops_vcf, gatk_vcf, merged_vcf, annotated_tsv, pri
             path_genes_html = ', '.join(gene_info['pathogenic_genes']) or '—'
 
             # anchor link to coverage plot
-            plot_anchor = f'plot-{sample_id}_{chrom}_{start}_{end}_{sv_type}'
-            locus_html  = f'<a class="plot-link" href="#{plot_anchor}">{chrom}:{start}–{end}</a>'
+            plot_anchor = f'event-{sample_id}_{chrom}_{start}_{end}_{sv_type}'
+            locus_html = f'<a href="#{plot_anchor}">{chrom}:{start}–{end}</a>'
 
             event_rows += (
                 f'<tr>'
@@ -367,12 +442,56 @@ def build_report(sample_id, cnmops_vcf, gatk_vcf, merged_vcf, annotated_tsv, pri
     else:
         events_html = '<p class="muted">No priority events found.</p>'
 
-    # coverage plots
-    plots_html = (
-        '\n'.join(embed_pdf_html(p) for p in sorted(pdf_files))
-        if pdf_files
-        else '<p class="muted">No coverage plots generated.</p>'
-    )
+    # coverage plots grouped by event (ideogram -> depth -> normalized depth)
+    event_images = {}
+    unmatched_images = []
+    for img_path in sorted(image_files):
+        parsed = parse_event_image_name(img_path)
+        if not parsed:
+            unmatched_images.append(img_path)
+            continue
+        key = (parsed['chrom'], parsed['start'], parsed['end'], parsed['svtype'])
+        kind = parsed['kind']
+        event_images.setdefault(key, {'chrom': parsed['chrom'], 'start': int(parsed['start']), 'end': int(parsed['end']), 'svtype': parsed['svtype'], 'images': {}})
+        event_images[key]['images'][kind] = img_path
+
+    if event_images:
+        blocks = []
+        for key in sorted(event_images, key=lambda k: (event_images[k]['chrom'], event_images[k]['start'], event_images[k]['end'], event_images[k]['svtype'])):
+            event = event_images[key]
+            chrom = event['chrom']
+            start = event['start']
+            end = event['end']
+            svtype = event['svtype']
+            anchor_id = f'event-{sample_id}_{chrom}_{start}_{end}_{svtype}'
+            image_stack = []
+            for kind, label in [('ideogram', 'Ideogram'), ('depth', 'Depth Plot'), ('normalized', 'Normalized Depth Plot')]:
+                img_path = event['images'].get(kind)
+                if img_path:
+                    img_src = image_src_png(img_path)
+                    image_stack.append(f'<img src="{img_src}" alt="{label}">')
+            if image_stack:
+                blocks.append(f'<div class="event-plot-block" id="{anchor_id}"><div class="event-header">{chrom}:{start}–{end} {svtype}</div><div class="image-stack">{"".join(image_stack)}</div></div>')
+        if unmatched_images:
+            fallback_imgs = ''.join(
+                f'<img src="{image_src_png(p)}" alt="{Path(p).name}">'
+                for p in unmatched_images
+            )
+            blocks.append(
+                '<div class="event-plot-block">'
+                '<div class="event-header">Additional Plots (unmatched naming)</div>'
+                f'<div class="image-stack">{fallback_imgs}</div>'
+                '</div>'
+            )
+        plots_html = '\n'.join(blocks) if blocks else '<p class="muted">No coverage plots generated.</p>'
+    else:
+        if unmatched_images:
+            plots_html = ''.join(
+                f'<img src="{image_src_png(p)}" alt="{Path(p).name}">'
+                for p in unmatched_images
+            )
+        else:
+            plots_html = '<p class="muted">No coverage plots generated.</p>'
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -423,7 +542,7 @@ if __name__ == '__main__':
     if len(sys.argv) < 7:
         print(
             'Usage: create_report.py <sample_id> <cnmops_vcf> <gatk_vcf> '
-            '<merged_vcf> <annotated_tsv> <priority_tsv> [pdf_files ...]',
+            '<merged_vcf> <annotated_tsv> <priority_tsv> [image_files ...]',
             file=sys.stderr
         )
         sys.exit(1)
@@ -434,10 +553,17 @@ if __name__ == '__main__':
     merged_vcf    = sys.argv[4]
     annotated_tsv = sys.argv[5]
     priority_tsv  = sys.argv[6]
-    pdf_files     = sys.argv[7:]
+    raw_image_args = sys.argv[7:]
+    image_files = []
+    for token in raw_image_args:
+        # Handle list-like argument rendering: [a.png, b.png]
+        for part in str(token).split(','):
+            cleaned = part.strip().strip('[]').strip('"\'')
+            if cleaned:
+                image_files.append(cleaned)
 
     html = build_report(
-        sample_id, cnmops_vcf, gatk_vcf, merged_vcf, annotated_tsv, priority_tsv, pdf_files
+        sample_id, cnmops_vcf, gatk_vcf, merged_vcf, annotated_tsv, priority_tsv, image_files
     )
 
     out = f'{sample_id}.cnv_report.html'

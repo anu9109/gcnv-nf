@@ -10,7 +10,7 @@ process GENERATE_REPORT {
         path merged_vcf
         path annotated_tsv
         path priority_tsv
-        path coverage_plots   // collection of PDFs (may be empty)
+        path coverage_plots   // collection of PNGs (may be empty)
 
     output:
         path "${sample_id}.cnv_report.html", emit: report_html
