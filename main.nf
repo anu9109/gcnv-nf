@@ -297,6 +297,13 @@ workflow GATK_GCNV {
 }
 
 
+workflow.onComplete {
+    if (workflow.success) {
+        def workDir = new File(workflow.workDir.toString())
+        log.info "Pipeline completed successfully. Removing work directory: ${workDir}"
+        workDir.deleteDir()
+    }
+}
 
 
 
