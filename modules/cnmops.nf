@@ -15,8 +15,8 @@ process PREPARE_SAMPLE_LIST {
     echo "1. Creating output directory if it does not exist"
     mkdir -p ${params.outdir}/cnmops
 
-    echo "2. Gathering samples to normalize sample of interest against"
-    shuf -n 19 ${bams_list} > bams.txt
+    echo "2. Add reference samples to sample of interest"
+    cat ${bams_list} > bams.txt
     echo -e "${sample_id}\\t${bam_file}" >> bams.txt
     """
 }
