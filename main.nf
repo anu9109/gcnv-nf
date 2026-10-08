@@ -93,6 +93,14 @@ workflow {
             PLOT_EVENT_COVERAGE.out.coverage_plots.collect()
         )
     }
+
+    workflow.onComplete {
+        if (workflow.success) {
+            def workDir = new File(workflow.workDir.toString())
+            log.info "Pipeline completed successfully. Removing work directory: ${workDir}"
+            workDir.deleteDir()
+        }
+    }
 }
 
 workflow RERUN_VIZ {
@@ -313,18 +321,6 @@ workflow PREPARE_GENOME {
         SUBSET_GENOME_FASTA.out.subset_fasta
     )
 }
-
-
-workflow.onComplete {
-    if (workflow.success) {
-        def workDir = new File(workflow.workDir.toString())
-        log.info "Pipeline completed successfully. Removing work directory: ${workDir}"
-        workDir.deleteDir()
-    }
-}
-
-
-
 
 
 

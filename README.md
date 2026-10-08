@@ -120,7 +120,7 @@ Events are retained if both conditions are met:
 - [cn.mops](https://bioconductor.org/packages/cn.mops/) — `ghcr.io/anu9109/cnmops` container
 - [seqtk](https://github.com/lh3/seqtk) — `biocontainers/seqtk` container (standalone genome prep only)
 - [GATK](https://gatk.broadinstitute.org/) 4.6.1.0 — `broadinstitute/gatk` container
-- [SURVIVOR](https://github.com/fritzsedlazeck/SURVIVOR) + bcftools — Wave-built container
+- [SURVIVOR](https://github.com/fritzsedlazeck/SURVIVOR) + bcftools — [Wave-built container](https://wave.seqera.io/view/builds/bd-24ae58f6dadc8105_1)
 - [AnnotSV](https://lbbe-software.github.io/AnnotSV/) + bedtools — run natively on the host (not containerized)
 - R with `ggplot2`, `data.table`, `tidyverse` (for coverage plots) — `ghcr.io/anu9109/gcnv_viz` container
 
