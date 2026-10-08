@@ -1,10 +1,28 @@
 
-process PREPROCESS_GENOME_FASTA {
+process SUBSET_GENOME_FASTA {
 
-    publishDir "${params.outdir}/gatk_gcnv/genome", mode: 'copy'
+    publishDir "${params.outdir}", mode: 'copy'
 
     input:
         val gr37_fasta_in
+
+    output:
+        path "gr37_clean.fasta", emit: subset_fasta
+
+    script:
+    """
+    echo "Subsetting genome fasta to only chromosomes 1-22, X and Y.."
+    seqtk subseq ${gr37_fasta_in} ${params.genome_chrs} > gr37_clean.fasta
+    """
+}
+
+
+process PREPROCESS_GENOME_FASTA {
+
+    publishDir "${params.outdir}", mode: 'copy'
+
+    input:
+        path gr37_clean_fasta
 
     output:
         path "gr37_clean.fasta", emit: ref_fasta
@@ -16,24 +34,21 @@ process PREPROCESS_GENOME_FASTA {
     script:
     """
     export JAVA_TOOL_OPTIONS="-XX:+PerfDisableSharedMem -Djava.io.tmpdir=\$PWD"
-    echo "1. Subsetting genome fasta to only chromosomes 1-22, X and Y.."
-    ${params.seqtk} subseq ${gr37_fasta_in} ${params.genome_chrs} > gr37_clean.fasta
-    
-    echo "2. Indexing genome fasta.."
-    samtools faidx gr37_clean.fasta
+    echo "1. Indexing genome fasta.."
+    samtools faidx ${gr37_clean_fasta}
 
-    echo "3. Creating genome dictionary file.."
-    gatk CreateSequenceDictionary -R gr37_clean.fasta
+    echo "2. Creating genome dictionary file.."
+    gatk CreateSequenceDictionary -R ${gr37_clean_fasta}
 
-    echo "4. Preprocessing genome fasta into GATK .interval_list format.."
-    gatk PreprocessIntervals -R gr37_clean.fasta \\
+    echo "3. Preprocessing genome fasta into GATK .interval_list format.."
+    gatk PreprocessIntervals -R ${gr37_clean_fasta} \\
         --padding 0 \\
         -imr OVERLAPPING_ONLY \\
         -O gr37_clean.interval_list
 
-    echo "5. Annotating intervals with GC %, mappability and segmental duplication content.."
+    echo "4. Annotating intervals with GC %, mappability and segmental duplication content.."
     gatk AnnotateIntervals -L gr37_clean.interval_list \\
-        -R gr37_clean.fasta \\
+        -R ${gr37_clean_fasta} \\
         --mappability-track ${params.mappability_bed} \\
         --segmental-duplication-track ${params.segmental_duplication_bed} \\
         -imr OVERLAPPING_ONLY \\

@@ -4,6 +4,7 @@ nextflow.enable.dsl=2
 include { PREPARE_SAMPLE_LIST } from './modules/cnmops.nf'
 include { RUN_CNMOPS } from './modules/cnmops.nf'
 include { CNMOPS_TO_VCF } from './modules/cnmops.nf'
+include { SUBSET_GENOME_FASTA } from './modules/gatk.nf'
 include { PREPROCESS_GENOME_FASTA } from './modules/gatk.nf'
 include { COLLECT_READ_COUNTS } from './modules/gatk.nf'
 include { FILTER_GENOME } from './modules/gatk.nf'
@@ -45,7 +46,6 @@ workflow {
         pedigree = file("${params.outdir}/gatk_gcnv/pedigree.txt")
         GATK_GCNV(
             bams_channel,
-            params.reference,
             scatter_count,
             sample_id_intervals_ch, 
             params.model_ploidy_outdir,
@@ -191,14 +191,14 @@ workflow CNMOPS {
 // Subworkflow: GATK gCNV Analysis
 //
 // This subworkflow performs germline CNV detection using GATK's gCNV caller.
-// It includes genome preprocessing, read count collection, ploidy determination,
+// It includes read count collection, ploidy determination,
 // CNV calling, postprocessing, and joint cohort segmentation.
+// Expects a pre-built genome (see standalone PREPARE_GENOME workflow) at params.genome_path.
 workflow GATK_GCNV {
 
 
     take:
         bams_channel // channel of [sample_id, bam_file] tuples        
-        gr37_fasta_in 
         scatter_count
         sample_id_intervals_ch            
         model_ploidy_outdir
@@ -209,43 +209,45 @@ workflow GATK_GCNV {
 
     main:
 
-        // Step 1: Preprocess genome fasta
-        PREPROCESS_GENOME_FASTA(
-            gr37_fasta_in
-        )
+        // Pre-built genome files produced by the standalone PREPARE_GENOME workflow
+        ref_fasta               = file("${params.ref_path}/gr37_clean.fasta")
+        fasta_index             = file("${params.ref_path}/gr37_clean.fasta.fai")
+        dict                    = file("${params.ref_path}/gr37_clean.dict")
+        interval_list           = file("${params.ref_path}/gr37_clean.interval_list")
+        annotated_interval_list = file("${params.ref_path}/gr37_clean_annotated.interval_list")
 
-        // Step 2: Collect read counts from samples
+        // Step 1: Collect read counts from samples
         COLLECT_READ_COUNTS(
             bams_channel,
-            PREPROCESS_GENOME_FASTA.out.interval_list,
-            PREPROCESS_GENOME_FASTA.out.ref_fasta,
-            PREPROCESS_GENOME_FASTA.out.fasta_index,
-            PREPROCESS_GENOME_FASTA.out.dict
+            interval_list,
+            ref_fasta,
+            fasta_index,
+            dict
         )
 
-        // Step 3: Filter genome intervals based on read count outliers
+        // Step 2: Filter genome intervals based on read count outliers
         COLLECT_READ_COUNTS.out.sample_read_counts.collect().set { read_count_list }
         FILTER_GENOME(
             read_count_list,
-            PREPROCESS_GENOME_FASTA.out.annotated_interval_list,
-            PREPROCESS_GENOME_FASTA.out.interval_list
+            annotated_interval_list,
+            interval_list
         )
 
-        // Step 4: Scatter genome intervals into shards
+        // Step 3: Scatter genome intervals into shards
         SCATTER_GENOME(
             scatter_count,
             FILTER_GENOME.out.filtered_interval_list
         )
 
     
-        // Step 5: Determine ploidy model - case mode
+        // Step 4: Determine ploidy model - case mode
         DETERMINE_PLOIDY_CASE(
             bams_channel,
             COLLECT_READ_COUNTS.out.sample_read_counts,
             model_ploidy_outdir
         )
 
-        // Step 6: Call germline CNVs in case mode
+        // Step 5: Call germline CNVs in case mode
         CALL_CNVS_CASE(
             sample_id_intervals_ch,
             COLLECT_READ_COUNTS.out.sample_read_counts.first(),
@@ -254,18 +256,18 @@ workflow GATK_GCNV {
             model_cnvs_outdir
         )
     
-        // Step 7: Postprocess CNVs
+        // Step 6: Postprocess CNVs
         POSTPROCESS_CNVS(
             bams_channel,
             CALL_CNVS_CASE.out.cnv_calls_dir.collect(), 
             model_cnvs_outdir,
-            PREPROCESS_GENOME_FASTA.out.dict,
+            dict,
             DETERMINE_PLOIDY_CASE.out.ploidy_calls,
             interval_ids.collect(),
             scatter_count
         )  
 
-        // Step 8: Filter out diploid (ALT=.) segments
+        // Step 7: Filter out diploid (ALT=.) segments
         FILTER_GATK(
             bams_channel.map { sample_id, bam -> sample_id },
             POSTPROCESS_CNVS.out.genotyped_segments_vcf,
@@ -278,9 +280,9 @@ workflow GATK_GCNV {
             bams_channel,
             POSTPROCESS_CNVS.out.genotyped_segments_vcf.first(),
             POSTPROCESS_CNVS.out.genotyped_segments_vcf_index.first(),
-            PREPROCESS_GENOME_FASTA.out.ref_fasta,
-            PREPROCESS_GENOME_FASTA.out.fasta_index,
-            PREPROCESS_GENOME_FASTA.out.dict,
+            ref_fasta,
+            fasta_index,
+            dict,
             FILTER_GENOME.out.filtered_interval_list,
             pedigree
         )
@@ -288,12 +290,28 @@ workflow GATK_GCNV {
     
 
     emit:
-        genome_fasta = PREPROCESS_GENOME_FASTA.out.ref_fasta
+        genome_fasta = ref_fasta
         read_counts = COLLECT_READ_COUNTS.out.sample_read_counts
         genotyped_segments_vcf = POSTPROCESS_CNVS.out.genotyped_segments_vcf
         genotyped_intervals_vcf = POSTPROCESS_CNVS.out.genotyped_intervals_vcf
         denoised_copy_ratios = POSTPROCESS_CNVS.out.denoised_copy_ratios
         genotyped_segments_filtered_vcf = FILTER_GATK.out.genotyped_segments_filtered_vcf
+}
+
+
+//
+// Standalone workflow: Genome Preparation
+//
+// Run independently from the main pipeline to preprocess a new genome fasta into the
+// files expected at params.genome_path (ref fasta, index, dict, interval lists).
+// Usage: nextflow run main.nf -entry PREPARE_GENOME --genome_fasta /path/to/genome.fasta
+workflow PREPARE_GENOME {
+    SUBSET_GENOME_FASTA(
+        file(params.genome_fasta)
+    )
+    PREPROCESS_GENOME_FASTA(
+        SUBSET_GENOME_FASTA.out.subset_fasta
+    )
 }
 
 
