@@ -2,6 +2,13 @@ process ANNOTSV {
 
     tag "AnnotSV on ${sample_id}"
     publishDir "${params.outdir}/annotsv", mode: 'copy'
+    errorStrategy 'retry'
+    maxRetries 3
+    memory {
+        // AnnotSV loads its annotation databases into memory
+        def base = 16.GB
+        return base * Math.pow(2, task.attempt - 1)
+    }
 
     input:
         val sample_id

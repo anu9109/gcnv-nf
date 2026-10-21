@@ -26,6 +26,12 @@ process PLOT_EVENT_COVERAGE {
 
     tag "Coverage plots for priority events in ${sample_id}"
     publishDir "${params.outdir}/plots", mode: 'copy'
+    errorStrategy 'retry'
+    maxRetries 3
+    memory {
+        def base = 8.GB
+        return base * Math.pow(2, task.attempt - 1)
+    }
 
     input:
         val sample_id

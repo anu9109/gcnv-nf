@@ -1,6 +1,13 @@
 process SURVIVOR_MERGE {
 
     publishDir "${params.outdir}/survivor", mode: 'copy'
+    errorStrategy 'retry'
+    maxRetries 3
+    cpus 4
+    memory {
+        def base = 8.GB
+        return base * Math.pow(2, task.attempt - 1)
+    }
 
     input:
         val sample_id

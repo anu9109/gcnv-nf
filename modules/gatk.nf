@@ -61,6 +61,12 @@ process COLLECT_READ_COUNTS {
 
     tag "Collect read counts from ${sample_id}"
     publishDir "${params.outdir}/gatk_gcnv", mode: 'copy' 
+    errorStrategy 'retry'
+    maxRetries 3
+    memory {
+        def base = 16.GB
+        return base * Math.pow(2, task.attempt - 1)
+    }
 
     input:
         tuple val(sample_id), val(bam_file)
@@ -91,6 +97,13 @@ process FILTER_GENOME {
 
     tag "Filter genome intervals"
     publishDir "${params.outdir}/gatk_gcnv/genome", mode: 'copy'
+    errorStrategy 'retry'
+    maxRetries 3
+    memory {
+        // Scales with cohort size (one read-count file per sample)
+        def base = 16.GB
+        return base * Math.pow(2, task.attempt - 1)
+    }
 
     input:
         path(read_count_files)
@@ -225,6 +238,13 @@ process POSTPROCESS_CNVS {
 
     tag "Postprocess CNVs for sample ${sample_id}"
     publishDir "${params.outdir}/gatk_gcnv", mode: 'copy'
+    errorStrategy 'retry'
+    maxRetries 3
+    memory {
+        // Combines all scatter shards at once
+        def base = 16.GB
+        return base * Math.pow(2, task.attempt - 1)
+    }
 
     input:
         tuple val(sample_id), val(bam_file)
