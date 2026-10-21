@@ -28,11 +28,6 @@ process RUN_CNMOPS {
     errorStrategy 'retry'
     maxRetries 2
     cpus 8
-    memory {
-        // Base memory (128 GB), doubled for each retry attempt
-        def base = 128.GB
-        return base * Math.pow(2, task.attempt - 1)
-    }
 
     input:
         path bams_txt
