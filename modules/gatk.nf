@@ -164,6 +164,7 @@ process DETERMINE_PLOIDY_CASE {
     tag "Determine germline contig ploidy on sample ${sample_id}"
     errorStrategy 'retry'   
     maxRetries 3
+    cpus 16
     memory {
         // Base memory (8 GB), doubled for each retry attempt
         def base = 8.GB
@@ -185,6 +186,9 @@ process DETERMINE_PLOIDY_CASE {
     export JAVA_TOOL_OPTIONS="-XX:+PerfDisableSharedMem -Djava.io.tmpdir=\$PWD"
     mkdir -p \$PWD/.pytensor
     export PYTENSOR_FLAGS="base_compiledir=\$PWD/.pytensor"
+    export OMP_NUM_THREADS=${task.cpus}
+    export OPENBLAS_NUM_THREADS=${task.cpus}
+    export MKL_NUM_THREADS=${task.cpus}
     
     gatk DetermineGermlineContigPloidy \\
         --model ${model_ploidy_outdir} \\
@@ -200,6 +204,7 @@ process CALL_CNVS_CASE {
     tag "Calling CNVs on sample ${sample_id}"
     errorStrategy 'retry'
     maxRetries 2
+    cpus 8
     memory {
         def base = 32.GB
         return base * Math.pow(2, task.attempt - 1)
@@ -222,6 +227,9 @@ process CALL_CNVS_CASE {
     export JAVA_TOOL_OPTIONS="-XX:+PerfDisableSharedMem -Djava.io.tmpdir=\$PWD"
     mkdir -p \$PWD/.pytensor
     export PYTENSOR_FLAGS="base_compiledir=\$PWD/.pytensor"
+    export OMP_NUM_THREADS=${task.cpus}
+    export OPENBLAS_NUM_THREADS=${task.cpus}
+    export MKL_NUM_THREADS=${task.cpus}
     
     gatk GermlineCNVCaller \\
         --run-mode CASE \\
