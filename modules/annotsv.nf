@@ -27,7 +27,6 @@ process ANNOTSV {
         -genomeBuild GRCh37 \\
         -typeOfAnnotation both \\
         -outputDir . \\
-        -outputFile ${sample_id}.cnvs.merged.annot.tsv \\
-        -bedtools ${params.bedtools}
+        -outputFile ${sample_id}.cnvs.merged.annot.tsv
     """
 }
